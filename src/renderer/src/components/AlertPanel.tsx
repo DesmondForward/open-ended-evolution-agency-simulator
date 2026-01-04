@@ -7,11 +7,26 @@ const AlertPanel: React.FC = () => {
     const currentState = useSimulationStore(state => state.currentState);
     const A_alert = useSimulationStore(state => state.parameters.A_alert);
 
-    const alertsEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const isUserAtBottomRef = useRef(true);
 
-    // Auto-scroll to bottom of alerts list
+    const handleScroll = () => {
+        if (scrollContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+            // Check if user is near bottom (e.g. within 50px)
+            const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+            isUserAtBottomRef.current = isAtBottom;
+        }
+    };
+
+    // Auto-scroll to bottom of alerts list if user is already at the bottom
     useEffect(() => {
-        alertsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (isUserAtBottomRef.current && scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({
+                top: scrollContainerRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
     }, [alerts]);
 
     const isAlerting = currentState.A >= A_alert;
@@ -34,7 +49,11 @@ const AlertPanel: React.FC = () => {
                 )}
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}
+            >
                 {alerts.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-secondary)', opacity: 0.5 }}>
                         <CheckCircle size={32} style={{ marginBottom: '8px' }} />
@@ -58,7 +77,6 @@ const AlertPanel: React.FC = () => {
                         </div>
                     ))
                 )}
-                <div ref={alertsEndRef} />
             </div>
         </div>
     );
