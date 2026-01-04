@@ -46,12 +46,12 @@ export const fetchAIControl = async (
     const prompt = `
 You are a "Hyper-Intelligent Researcher" overseeing an Open-Ended Evolutionary Simulation.
 Your goal is to Maximize "Agency" (A) in the system and ensure interesting, complex behavior emerges.
-You have control over the Environmental Difficulty/Novelty parameter "U" (0.0 to 1.0) and the internal SDE physics parameters.
+CRITICAL OBJECTIVE: You must get Agency (A) to cross the 0.75 threshold. Take calculated risks to achieve this.
 
 System Physics (Equations you can influence):
-- dC/dt = k_CD*D*(1-C) + k_U*U*(1-C) - 0.3*C  (Complexity growth vs decay)
-- dD/dt = 0.25*(1-D) - k_DU*U*D - 0.15*D^2    (Diversity growth vs selection pressure)
-- dA/dt = k_AC*C*(1-A) + 0.4*U*C*(1-A) - 0.35*A (Agency emergence vs decay)
+- dC/dt = k_CD*D*(1-C) + k_U*U*(1-C) - k_C_decay*C  (Complexity growth vs decay)
+- dD/dt = k_D_growth*(1-D) - k_DU*U*D - k_D_decay*D^2    (Diversity growth vs selection pressure)
+- dA/dt = k_AC*C*(1-A) + k_AU*U*C*(1-A) - k_A_decay*A (Agency emergence vs decay)
 
 Current System State:
 - Generation: ${state.generation.toFixed(1)}
@@ -76,11 +76,16 @@ Recent Strategy Analysis (Last 5 Steps):
 - Parameter Adjustments made: ${recentParamChanges} times.
 - VS Best Record: Current U is ${Math.abs(control.U - (bestControl?.U || 0)).toFixed(2)} away from best.
 
-Current Parameter values (you can tune these):
+Current Parameter values (you can tune all of these):
 - k_CD (Diversity->Complexity, 0-0.5): ${currentParams.k_CD.toFixed(3)}
 - k_AC (Complexity->Agency, 0-0.5): ${currentParams.k_AC.toFixed(3)}
 - k_DU (Control->Diversity Decay, 0-1.0): ${currentParams.k_DU.toFixed(3)}
 - k_U (Control->Stimulation, 0-0.5): ${currentParams.k_U.toFixed(3)}
+- k_C_decay (Complexity Decay, 0.1-0.5): ${currentParams.k_C_decay.toFixed(3)}
+- k_D_growth (Diversity Growth, 0.1-0.5): ${currentParams.k_D_growth.toFixed(3)}
+- k_D_decay (Diversity Decay, 0.1-0.5): ${currentParams.k_D_decay.toFixed(3)}
+- k_AU (Agency Stimulation, 0-1.0): ${currentParams.k_AU.toFixed(3)}
+- k_A_decay (Agency Decay, 0.1-0.5): ${currentParams.k_A_decay.toFixed(3)}
 - sigma_C (Noise C, 0-0.2): ${currentParams.sigma_C.toFixed(3)}
 - sigma_D (Noise D, 0-0.2): ${currentParams.sigma_D.toFixed(3)}
 - sigma_A (Noise A, 0-0.2): ${currentParams.sigma_A.toFixed(3)}
@@ -92,10 +97,11 @@ ${history.length > 0 ? history.map(h => `- Gen ${h.generation.toFixed(1)}: ${h.a
 
 Rules:
 1. Compare your Recent Strategy to the Best Record. If your recent AVG U or Params are very different from the Best Record and Agency is lower, CONSIDER REVERTING towards the Best Record.
-2. If the last 5 adjustments have not improved Agency, determine a better solution (e.g. drastic parameter shift or returning to known good state).
-3. If Diversity (D) is dangerously low (<0.25), reduce U or increase k_DU/k_U to stimulate growth.
-4. If Agency (A) is rising, you might increase U to challenge it, or fine-tune k_AC to reward complexity more.
-5. Use 'parameter_updates' to experiment with SDE physics. E.g., if the system is too chaotic, reduce sigmas. If stagnant, increase couplings.
+2. If the last 5 adjustments have not improved Agency, try a "Phase Shift" strategy (e.g. drop U low to rebuild diversity, then spike U high).
+3. If Diversity (D) is dangerously low (<0.25), REDUCE U or DECREASE k_DU to reduce pressure. Do not increase k_DU.
+4. If Agency (A) is rising, you might increase U to challenge it, or fine-tune k_AC/k_AU to reward complexity more.
+5. Use 'parameter_updates' to experiment with SDE physics. E.g., slightly lower k_A_decay can help sustain Agency. Higher k_AU makes Difficulty imply more Agency.
+6. Think Multi-Step: Don't just react to the immediate generation. Try to set up a trajectory (e.g. "Growth Phase" -> "Challenge Phase").
 
 Return a JSON object with:
 - "thought_process": A brief 1-sentence reasoning, citing history if relevant.

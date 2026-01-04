@@ -43,23 +43,27 @@ export function computeDrift(
     control: ControlSignal
 ): { dC: number; dD: number; dA: number; dAlertRate: number } {
     const { C, D, A, alertRate } = state;
-    const { k_CD, k_AC, k_DU, k_U, tau, eps, A_alert, dt } = params;
+    const {
+        k_CD, k_AC, k_DU, k_U,
+        k_C_decay, k_D_growth, k_D_decay, k_AU, k_A_decay,
+        tau, eps, A_alert, dt
+    } = params;
     const { U } = control;
 
     // E1: Complexity dynamics
     // Grows via diversity-driven innovation and difficulty-driven challenge
     // Decays via simplification/selection bottlenecks
-    const dC = (k_CD * D * (1 - C) + k_U * U * (1 - C) - 0.3 * C) * dt;
+    const dC = (k_CD * D * (1 - C) + k_U * U * (1 - C) - k_C_decay * C) * dt;
 
     // E2: Diversity dynamics
     // Increases through mutation/niche creation
     // Decreases under harsh environments and saturation effects
-    const dD = (0.25 * (1 - D) - k_DU * U * D - 0.15 * D * D) * dt;
+    const dD = (k_D_growth * (1 - D) - k_DU * U * D - k_D_decay * D * D) * dt;
 
     // E3: Agency dynamics
     // Emerges from complexity and is accelerated by challenge
     // Bounded by normalization and decays without sustained adaptation
-    const dA = (k_AC * C * (1 - A) + 0.4 * U * C * (1 - A) - 0.35 * A) * dt;
+    const dA = (k_AC * C * (1 - A) + k_AU * U * C * (1 - A) - k_A_decay * A) * dt;
 
     // E4: Alert rate dynamics
     // Smooth alert-rate process for robust threshold crossing detection

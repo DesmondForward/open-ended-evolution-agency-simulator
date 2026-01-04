@@ -17,14 +17,14 @@ const ParameterPanel: React.FC = () => {
         <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '2px' }}>
                 <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
-                <span>{parameters[paramKey].toFixed(3)}</span>
+                <span>{(parameters[paramKey] as number).toFixed(3)}</span>
             </div>
             <input
                 type="range"
                 min={min}
                 max={max}
                 step={step}
-                value={parameters[paramKey]}
+                value={parameters[paramKey] as number}
                 onChange={(e) => handleChange(paramKey, parseFloat(e.target.value))}
             />
         </div>
@@ -56,6 +56,15 @@ const ParameterPanel: React.FC = () => {
                     <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>Coupling Rates</h4>
                     <ParamInput label="Diversity → Complexity (k_CD)" paramKey="k_CD" min={0} max={0.5} step={0.01} />
                     <ParamInput label="Complexity → Agency (k_AC)" paramKey="k_AC" min={0} max={0.5} step={0.01} />
+                    <ParamInput label="Agency → Difficulty (k_AU)" paramKey="k_AU" min={0} max={1.0} step={0.01} />
+
+                    <h4 style={{ margin: '16px 0 8px 0', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>Growth & Decay</h4>
+                    <ParamInput label="Complexity Decay (k_C_decay)" paramKey="k_C_decay" min={0.1} max={0.5} step={0.01} />
+                    <ParamInput label="Diversity Growth (k_D_growth)" paramKey="k_D_growth" min={0.1} max={0.5} step={0.01} />
+                    <ParamInput label="Diversity Decay (k_D_decay)" paramKey="k_D_decay" min={0.1} max={0.5} step={0.01} />
+                    <ParamInput label="Agency Decay (k_A_decay)" paramKey="k_A_decay" min={0.1} max={0.5} step={0.01} />
+
+                    <h4 style={{ margin: '16px 0 8px 0', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>Control Physics</h4>
                     <ParamInput label="Control → Diversity Decay (k_DU)" paramKey="k_DU" min={0} max={1.0} step={0.01} />
                     <ParamInput label="Control → Stimulation (k_U)" paramKey="k_U" min={0} max={0.5} step={0.01} />
 

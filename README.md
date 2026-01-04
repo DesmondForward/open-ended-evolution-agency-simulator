@@ -2,7 +2,7 @@
 
 A specialized research tool for simulating and detecting emergent agency in open-ended evolutionary systems. This application implements a Stochastic Differential Equation (SDE) engine to model the dynamics of Complexity, Diversity, and Agency within a theoretical ecosystem.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg)
 
 ## 🔬 Scientific Background
 
@@ -11,15 +11,15 @@ This simulator operates on the hypothesis that **Agency** ($A$) emerges as a pro
 The core simulation engine utilizes **Euler-Maruyama integration** to solve the following system of Stochastic Differential Equations:
 
 1.  **Complexity Dynamics** ($dC$):
-    $$dC = (k_{CD} \cdot D \cdot (1-C) + k_U \cdot U \cdot (1-C) - 0.3C)dt + \sigma_C dW_C$$
+    $$dC = (k_{CD} \cdot D \cdot (1-C) + k_U \cdot U \cdot (1-C) - k_{C\_decay} \cdot C)dt + \sigma_C dW_C$$
     *Models complexity growth via diversity-driven innovation and environmental challenge.*
 
 2.  **Diversity Dynamics** ($dD$):
-    $$dD = (0.25(1-D) - k_{DU} \cdot U \cdot D - 0.15D^2)dt + \sigma_D dW_D$$
+    $$dD = (k_{D\_growth}(1-D) - k_{DU} \cdot U \cdot D - k_{D\_decay}D^2)dt + \sigma_D dW_D$$
     *Models the balance between niche creation and selection pressure.*
 
 3.  **Agency Dynamics** ($dA$):
-    $$dA = (k_{AC} \cdot C \cdot (1-A) + 0.4 \cdot U \cdot C \cdot (1-A) - 0.35A)dt + \sigma_A dW_A$$
+    $$dA = (k_{AC} \cdot C \cdot (1-A) + k_{AU} \cdot U \cdot C \cdot (1-A) - k_{A\_decay} \cdot A)dt + \sigma_A dW_A$$
     *Models agency as a higher-order property emerging from complexity, accelerated by challenge.*
 
 4.  **Alert Rate** ($dA_{alert}$):
@@ -30,7 +30,7 @@ The core simulation engine utilizes **Euler-Maruyama integration** to solve the 
 
 The simulator features a "Hyper-Intelligent Researcher" mode powered by **GPT-5.2-2025-12-11**. The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
 -   **Environmental Difficulty ($U$)**: To challenge the system or protect it from collapse.
--   **Full SDE Parameter Tuning**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, etc.) and noise levels ($\sigma$) to steer the system.
+-   **Full SDE Parameter Tuning**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, $k_{C\_decay}$, etc.) and noise levels ($\sigma$) to steer the system.
 -   **Strategy & Memory**: The AI maintains a history of its actions to analyze the effectiveness of its interventions over time.
 
 The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress and adaptation.
@@ -112,16 +112,21 @@ The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress a
 
 ## 🎛 Configuration & Parameters
 
-The simulation uses default parameters defined in `src/renderer/src/simulation/types.ts`. Key parameters include:
+The simulation uses default parameters defined in `src/renderer/src/simulation/types.ts`. Key tunable parameters include:
 
 | Parameter | Symbol | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **Coupling Rate** | $k_{CD}$ | 0.12 | Rate at which diversity drives complexity. |
 | **Agency Rate** | $k_{AC}$ | 0.10 | Rate at which complexity drives agency. |
 | **Selection Pressure** | $k_{DU}$ | 0.35 | Impact of environmental difficulty on reducing diversity. |
-| **Stochasticity** | $\sigma_{C,D,A}$ | 0.02-0.05 | Noise levels for each variable. |
-| **Alert Threshold** | $A_{alert}$ | 0.7 | Agency level that triggers an alert. |
-| **Use GPU** | `useGPU` | `false` | Enable WebGPU acceleration. |
+| **Difficulty Stimulus** | $k_{U}$ | 0.08 | Impact of environmental difficulty on complexity. |
+| **Complexity Decay** | $k_{C\_decay}$ | 0.3 | Natural decay rate of complexity. |
+| **Diversity Growth** | $k_{D\_growth}$ | 0.25 | Intrinsic growth rate of diversity. |
+| **Diversity Decay** | $k_{D\_decay}$ | 0.15 | Quadratic self-inhibition of diversity. |
+| **Agency Stimulus** | $k_{AU}$ | 0.4 | Impact of difficulty on agency emergence. |
+| **Agency Decay** | $k_{A\_decay}$ | 0.35 | Natural decay rate of agency. |
+| **Stochasticity** | $\sigma_{C,D,A}$ | 0.005-0.02 | Noise levels for each variable. |
+| **Alert Threshold** | $A_{alert}$ | 0.75 | Agency level that triggers an alert. |
 
 ## 🛠 Development
 

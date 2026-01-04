@@ -3,11 +3,15 @@ import { SimulationParameters, ControlSignal, SimulationState } from './types';
 
 // WGSL Compute Shader
 const SDE_SHADER = `
-struct Params {
     k_CD: f32,
     k_U: f32,
     k_DU: f32,
     k_AC: f32,
+    k_C_decay: f32,
+    k_D_growth: f32,
+    k_D_decay: f32,
+    k_AU: f32,
+    k_A_decay: f32,
     tau: f32,
     eps: f32,
     A_alert: f32,
@@ -76,13 +80,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let noiseA = params.sigma_A * rand_normal(seed_base + 400000u, seed_base + 500000u) * sqrt(params.dt);
 
     // E1: Complexity
-    let dC = (params.k_CD * current.D * (1.0 - current.C) + params.k_U * params.U * (1.0 - current.C) - 0.3 * current.C) * params.dt;
+    let dC = (params.k_CD * current.D * (1.0 - current.C) + params.k_U * params.U * (1.0 - current.C) - params.k_C_decay * current.C) * params.dt;
     
     // E2: Diversity
-    let dD = (0.25 * (1.0 - current.D) - params.k_DU * params.U * current.D - 0.15 * current.D * current.D) * params.dt;
+    let dD = (params.k_D_growth * (1.0 - current.D) - params.k_DU * params.U * current.D - params.k_D_decay * current.D * current.D) * params.dt;
     
     // E3: Agency
-    let dA = (params.k_AC * current.C * (1.0 - current.A) + 0.4 * params.U * current.C * (1.0 - current.A) - 0.35 * current.A) * params.dt;
+    let dA = (params.k_AC * current.C * (1.0 - current.A) + params.k_AU * params.U * current.C * (1.0 - current.A) - params.k_A_decay * current.A) * params.dt;
     
     // E4: Alert Rate
     let alertSignal = sigmoid((current.A - params.A_alert) / params.eps);
@@ -103,7 +107,7 @@ export class WebGpuEngine {
     private device: GPUDevice | null = null;
     private pipeline: GPUComputePipeline | null = null;
     private bindGroup: GPUBindGroup | null = null;
-    
+
     private paramBuffer: GPUBuffer | null = null;
     private stateBufferA: GPUBuffer | null = null; // Ping
     private stateBufferB: GPUBuffer | null = null; // Pong
@@ -115,7 +119,7 @@ export class WebGpuEngine {
     // We toggle between ping-pong buffers
     private stepCount: number = 0;
 
-    constructor() {}
+    constructor() { }
 
     async initialize(): Promise<boolean> {
         if (this.initialized) return true;
@@ -153,21 +157,21 @@ export class WebGpuEngine {
 
         // Create Buffers
         this.paramBuffer = this.device.createBuffer({
-            size: 64, // 14 floats * 4 bytes = 56, aligned to 16 bytes -> 64 is safe
+            size: 80, // 19 floats * 4 bytes = 76, aligned to 16 bytes -> 80 is safe (needs to be multiple of 16)
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
         // Struct size: 4 floats = 16 bytes
-        const stateBufferSize = this.numAgents * 16; 
+        const stateBufferSize = this.numAgents * 16;
 
         // Initial state data (all agents start at default or random)
         const initialData = new Float32Array(this.numAgents * 4);
-        for(let i=0; i<this.numAgents; i++) {
+        for (let i = 0; i < this.numAgents; i++) {
             // Initialize with slight variance to see spread immediately
-            initialData[i*4 + 0] = 0.1; // C
-            initialData[i*4 + 1] = 0.5; // D
-            initialData[i*4 + 2] = 0.01; // A
-            initialData[i*4 + 3] = 0.0; // alertRate
+            initialData[i * 4 + 0] = 0.1; // C
+            initialData[i * 4 + 1] = 0.5; // D
+            initialData[i * 4 + 2] = 0.01; // A
+            initialData[i * 4 + 3] = 0.0; // alertRate
         }
 
         this.stateBufferA = this.device.createBuffer({
@@ -196,7 +200,7 @@ export class WebGpuEngine {
     }
 
     async step(
-        currentParams: SimulationParameters, 
+        currentParams: SimulationParameters,
         control: ControlSignal,
         lastState: SimulationState // Used for generation tracking, actual state is on GPU
     ): Promise<SimulationState> {
@@ -207,18 +211,20 @@ export class WebGpuEngine {
         // 1. Update Uniforms
         // Struct alignment in WGSL is strict. Floats are 4 bytes.
         // struct Params {
-        //     k_CD: f32, k_U: f32, k_DU: f32, k_AC: f32,
+        //     k_CD: f32, k_U: f32, k_DU: f32, k_AC: f32, 
+        //     k_C_decay: f32, k_D_growth: f32, k_D_decay: f32, k_AU: f32, k_A_decay: f32,
         //     tau: f32, eps: f32, A_alert: f32, dt: f32,
         //     sigma_C: f32, sigma_D: f32, sigma_A: f32, U: f32,
         //     generation: f32, seed: f32
         // };
         const paramArray = new Float32Array([
             currentParams.k_CD, currentParams.k_U, currentParams.k_DU, currentParams.k_AC,
+            currentParams.k_C_decay, currentParams.k_D_growth, currentParams.k_D_decay, currentParams.k_AU, currentParams.k_A_decay,
             currentParams.tau, currentParams.eps, currentParams.A_alert, currentParams.dt,
             currentParams.sigma_C, currentParams.sigma_D, currentParams.sigma_A, control.U,
             lastState.generation, Math.random() * 10000 // Seed
         ]);
-        
+
         this.device.queue.writeBuffer(this.paramBuffer, 0, paramArray);
 
         // 2. Set up Bind Group
@@ -241,7 +247,7 @@ export class WebGpuEngine {
         passEncoder.setPipeline(this.pipeline);
         passEncoder.setBindGroup(0, bindGroup);
         // Workgroup size 64. Total agents 65536. Dispatch 1024 groups.
-        passEncoder.dispatchWorkgroups(this.numAgents / 64); 
+        passEncoder.dispatchWorkgroups(this.numAgents / 64);
         passEncoder.end();
 
         // 4. Copy result to readback buffer (optional, maybe not every frame if too slow?)
@@ -260,12 +266,12 @@ export class WebGpuEngine {
         // Optimization: Don't iterate all 65k in JS main thread if not needed, but JS is fast enough for this.
         // It's just a simple loop.
         for (let i = 0; i < this.numAgents; i++) {
-            sumC += data[i*4 + 0];
-            sumD += data[i*4 + 1];
-            sumA += data[i*4 + 2];
-            sumAlert += data[i*4 + 3];
+            sumC += data[i * 4 + 0];
+            sumD += data[i * 4 + 1];
+            sumA += data[i * 4 + 2];
+            sumAlert += data[i * 4 + 3];
         }
-        
+
         const meanC = sumC / this.numAgents;
         const meanD = sumD / this.numAgents;
         const meanA = sumA / this.numAgents;

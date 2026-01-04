@@ -49,6 +49,18 @@ export interface SimulationParameters {
     dt: number;
     /** Whether to use GPU for compute (Ensemble Mode) */
     useGPU?: boolean;
+
+    // New tunable coefficients
+    /** Complexity decay rate (default 0.3) */
+    k_C_decay: number;
+    /** Diversity intrinsic growth rate (default 0.25) */
+    k_D_growth: number;
+    /** Diversity decay rate coefficient (default 0.15) */
+    k_D_decay: number;
+    /** Agency coupling to Difficulty (default 0.4) */
+    k_AU: number;
+    /** Agency decay rate (default 0.35) */
+    k_A_decay: number;
 }
 
 /** Known quantities from the PRD */
@@ -120,14 +132,21 @@ export const DEFAULT_PARAMETERS: SimulationParameters = {
     k_AC: 0.10,
     k_DU: 0.35,
     k_U: 0.08,
-    sigma_C: 0.03,
+    sigma_C: 0.005, // Lowered for stability as per log findings
     sigma_D: 0.02,
-    sigma_A: 0.05,
+    sigma_A: 0.005, // Lowered for stability
     tau: 5,
     eps: 0.05,
-    A_alert: 0.7,
+    A_alert: 0.75, // Updated target
     dt: 0.1,
-    useGPU: false
+    useGPU: false,
+
+    // New defaults matching original hardcoded values
+    k_C_decay: 0.3,
+    k_D_growth: 0.25,
+    k_D_decay: 0.15,
+    k_AU: 0.4,
+    k_A_decay: 0.35
 };
 
 /** Default control signal */
