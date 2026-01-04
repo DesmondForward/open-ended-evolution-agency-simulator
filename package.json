@@ -1,0 +1,32 @@
+{
+    "name": "evolution-simulator",
+    "version": "1.0.0",
+    "description": "Open-Ended Virtual Evolution Simulator with Agency Detection",
+    "main": "./out/main/index.js",
+    "author": "",
+    "scripts": {
+        "dev": "electron-vite dev",
+        "build": "electron-vite build",
+        "preview": "electron-vite preview",
+        "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts"
+    },
+    "dependencies": {
+        "@electron-toolkit/preload": "^3.0.1",
+        "@electron-toolkit/utils": "^3.0.0",
+        "lucide-react": "^0.300.0",
+        "recharts": "^2.12.0",
+        "zustand": "^4.5.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "@types/react": "^18.2.45",
+        "@types/react-dom": "^18.2.17",
+        "@vitejs/plugin-react": "^4.2.1",
+        "electron": "^28.0.0",
+        "electron-vite": "^2.0.0",
+        "eslint": "^8.56.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "typescript": "^5.3.3"
+    }
+}
