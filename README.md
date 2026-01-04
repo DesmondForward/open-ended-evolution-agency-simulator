@@ -25,24 +25,28 @@ The core simulation engine utilizes **Euler-Maruyama integration** to solve the 
 4.  **Alert Rate** ($dA_{alert}$):
     $$dA_{alert\_rate} = \frac{1}{\tau} \cdot \sigma(\frac{A - A_{alert}}{\epsilon})dt$$
     *Smooths the detection signal to identify robust threshold crossings indicating emergent agency.*
-    
+
 ## 🧠 AI-Driven Control
 
-The simulator features a "Hyper-Intelligent Researcher" mode powered by **GPT-5.2** (or compatible LLMs). The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
+The simulator features a "Hyper-Intelligent Researcher" mode powered by **GPT-5.2-2025-12-11**. The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
 -   **Environmental Difficulty ($U$)**: To challenge the system or protect it from collapse.
--   **SDE Parameters**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, etc.) to steer the system towards higher Agency.
+-   **Full SDE Parameter Tuning**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, etc.) and noise levels ($\sigma$) to steer the system.
+-   **Strategy & Memory**: The AI maintains a history of its actions to analyze the effectiveness of its interventions over time.
 
 The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress and adaptation.
 
 ## ✨ Features
 
--   **Real-time SDE Integration**: High-performance Euler-Maruyama solver running at 60fps (default).
+-   **Real-time SDE Integration**: High-performance Euler-Maruyama solver.
+-   **WebGPU Acceleration**: Optional GPU-based compute for potentially massive parallel simulations (Experimental).
 -   **AI Parameter Tuning**: Autonomous optimization of simulation parameters by an LLM agent.
+-   **AI Action Logging**: Comprehensive CSV logging of all AI decisions, reasoning, and parameter changes for analysis.
 -   **Agency Detection System**: Automated monitoring system that triggers alerts when agency ($A$) crosses critical thresholds.
 -   **Interactive Dashboard**:
     -   Live telemetry charts for $C$, $D$, and $A$.
     -   Real-time "Agency Alert" logging.
     -   Environment Control Slider ($U$ - Novelty/Difficulty).
+    -   Direct access to logs via "Open Log Folder".
 -   **Validation Framework**: Built-in metrics to track state bounds violations and diversity floor compliance.
 -   **Modern Tech Stack**: Built with Electron, React, TypeScript, and Zustand for state management.
 
@@ -88,13 +92,16 @@ The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress a
 ```
 ├── src/
 │   ├── main/                 # Electron main process
-│   │   └── index.ts          # Application entry point
+│   │   └── index.ts          # IPC Handlers (Logging, Window Mgmt)
 │   ├── preload/              # Electron preload scripts
 │   └── renderer/             # React frontend
 │       ├── src/
 │       │   ├── components/   # UI Components (Dashboard, Charts)
+│       │   ├── services/     # External Services (AI Integration)
+│       │   │   └── aiService.ts
 │       │   ├── simulation/   # Core SDE Engine Logic
 │       │   │   ├── sdeEngine.ts  # Euler-Maruyama Solver
+│       │   │   ├── webGpuEngine.ts # WebGPU Implementation
 │       │   │   └── types.ts      # Simulation Interfaces & Parameters
 │       │   ├── store/        # Zustand State Management
 │       │   └── App.tsx       # Main Application Layout
@@ -114,6 +121,7 @@ The simulation uses default parameters defined in `src/renderer/src/simulation/t
 | **Selection Pressure** | $k_{DU}$ | 0.35 | Impact of environmental difficulty on reducing diversity. |
 | **Stochasticity** | $\sigma_{C,D,A}$ | 0.02-0.05 | Noise levels for each variable. |
 | **Alert Threshold** | $A_{alert}$ | 0.7 | Agency level that triggers an alert. |
+| **Use GPU** | `useGPU` | `false` | Enable WebGPU acceleration. |
 
 ## 🛠 Development
 
