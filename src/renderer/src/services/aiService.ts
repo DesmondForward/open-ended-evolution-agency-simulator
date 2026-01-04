@@ -1,5 +1,5 @@
 
-import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry } from '../simulation/types';
+import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry, SavedAgent } from '../simulation/types';
 import { computeDrift } from '../simulation/sdeEngine';
 
 interface AIResponse {
@@ -166,5 +166,78 @@ Return a JSON object with:
     } catch (error) {
         console.error("AI Control Failed:", error);
         return null;
+    }
+};
+
+export const generateAgentDescription = async (
+    agentData: Omit<SavedAgent, 'name' | 'description' | 'tags'>
+): Promise<{ name: string; description: string; tags: string[] } | null> => {
+    const apiKey = import.meta.env.VITE_AI_API_KEY;
+    const apiUrl = 'https://api.openai.com/v1/chat/completions';
+
+    if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+        return {
+            name: `Agent-${agentData.id.substring(0, 6)}`,
+            description: "AI API Key missing. Auto-generated placeholder description.",
+            tags: ["High-Agency", "Manual"]
+        };
+    }
+
+    const prompt = `
+You are an "Xenobiologist" analyzing a newly emerged digital lifeform (Agent).
+The agent has just crossed the Agency Threshold (A > ${agentData.metrics.A.toFixed(2)}).
+
+**Agent Data:**
+- ID: ${agentData.id}
+- Generation of Emergence: ${agentData.generation.toFixed(1)}
+- Metrics at Emergence: Agency=${agentData.metrics.A.toFixed(3)}, Complexity=${agentData.metrics.C.toFixed(3)}, Diversity=${agentData.metrics.D.toFixed(3)}
+- Environmental Conditions: U=${agentData.environmentalControl.U.toFixed(2)} (Difficulty)
+- Parameters (DNA): ${JSON.stringify(agentData.parameters)}
+- Run Context: Best Agency So Far=${agentData.runContext.bestAgencySoFar.toFixed(3)}
+- Validation Status: Bounds Violation Rate=${(agentData.validationMetrics.stateBoundsViolationRate * 100).toFixed(1)}%, Diversity Floor Violations=${(agentData.validationMetrics.diversityFloorViolationFraction * 100).toFixed(1)}%
+
+**History leading to emergence:**
+${agentData.historySnippet.map(h => `- Gen ${h.generation}: ${h.action} -> ${h.outcome.delta_A > 0 ? 'Agency rose' : 'Agency fell'}`).join('\n')}
+
+**Task:**
+1. Give this agent a creative, scientific name (e.g., "Cryo-Stasis Strategist", "Chaos Surfer").
+2. Write a "Spec Sheet" description (2-3 sentences). Explain *why* it emerged. Did it thrive on high complexity? Did it survive a difficulty spike? Use the history and parameters to tell the story.
+3. Assign 3-5 tags describing its nature (e.g. "High-Pressure", "Stable", "Burst-Agency", "Social").
+
+Return JSON format:
+{
+  "name": "...",
+  "description": "...",
+  "tags": ["...", "..."]
+}
+`;
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-5.2-2025-12-11',
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || data.message?.content;
+        return JSON.parse(content);
+
+    } catch (error) {
+        console.error("AI Description Generation Failed:", error);
+        return {
+            name: `Agent-${agentData.id.substring(0, 8)}`,
+            description: "Failed to generate AI description. See console for error.",
+            tags: ["Error"]
+        };
     }
 };

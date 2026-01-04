@@ -81,6 +81,78 @@ ipcMain.handle('open-logs-folder', async () => {
     return { success: true }
 })
 
+// --- Agent Library IPC Handlers ---
+
+ipcMain.handle('save-agent', async (_, agentData) => {
+    try {
+        const userDataPath = app.getPath('userData')
+        const libraryDir = join(userDataPath, 'library', 'agents')
+
+        // Ensure directory exists
+        if (!fs.existsSync(libraryDir)) {
+            fs.mkdirSync(libraryDir, { recursive: true })
+        }
+
+        const safeId = agentData.id.replace(/[^a-z0-9-]/gi, '_')
+        const filename = `agent_${safeId}.json`
+        const filePath = join(libraryDir, filename)
+
+        fs.writeFileSync(filePath, JSON.stringify(agentData, null, 2), 'utf8')
+        return { success: true, path: filePath }
+    } catch (error) {
+        console.error('Failed to save agent:', error)
+        return { success: false, error: String(error) }
+    }
+})
+
+ipcMain.handle('get-agents', async () => {
+    try {
+        const userDataPath = app.getPath('userData')
+        const libraryDir = join(userDataPath, 'library', 'agents')
+
+        if (!fs.existsSync(libraryDir)) {
+            return []
+        }
+
+        const files = fs.readdirSync(libraryDir).filter(f => f.endsWith('.json'))
+        const agents = files.map(file => {
+            try {
+                const content = fs.readFileSync(join(libraryDir, file), 'utf8')
+                return JSON.parse(content)
+            } catch (e) {
+                console.error(`Failed to read agent file ${file}:`, e)
+                return null
+            }
+        }).filter(a => a !== null)
+
+        // Sort by timestamp descending
+        agents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+        return agents
+    } catch (error) {
+        console.error('Failed to get agents:', error)
+        return []
+    }
+})
+
+ipcMain.handle('delete-agent', async (_, id) => {
+    try {
+        const userDataPath = app.getPath('userData')
+        const libraryDir = join(userDataPath, 'library', 'agents')
+        const safeId = id.replace(/[^a-z0-9-]/gi, '_')
+        const filename = `agent_${safeId}.json`
+        const filePath = join(libraryDir, filename)
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+            return { success: true }
+        }
+        return { success: false, error: 'File not found' }
+    } catch (error) {
+        return { success: false, error: String(error) }
+    }
+})
+
 app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.evolution.simulator')
 

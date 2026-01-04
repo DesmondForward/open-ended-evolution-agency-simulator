@@ -12,8 +12,9 @@ import {
     AIHistoryEntry
 } from '../simulation/types';
 import { eulerMaruyamaStep, shouldTriggerAlert, calculateValidationMetrics } from '../simulation/sdeEngine';
-import { fetchAIControl } from '../services/aiService';
+import { fetchAIControl, generateAgentDescription } from '../services/aiService';
 import { WebGpuEngine } from '../simulation/webGpuEngine';
+import { SavedAgent } from '../simulation/types';
 
 interface SimulationStore {
     // State
@@ -36,6 +37,7 @@ interface SimulationStore {
     bestAgency: number;
     bestParameters: SimulationParameters | null;
     bestControl: ControlSignal | null;
+    lastSavedGeneration: number; // Prevent spamming saves
 
     // Actions
     togglePlay: () => void;
@@ -58,6 +60,7 @@ let isAiBusy = false; // Prevent overlapping AI calls
 
 // Load initial best from localStorage
 const storedBest = localStorage.getItem('fipsm_best_parameters');
+const storedLastGen = localStorage.getItem('fipsm_last_saved_gen'); // Simple persistence for session
 const initialBest = storedBest ? JSON.parse(storedBest) : null;
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
@@ -83,6 +86,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     bestAgency: initialBest ? initialBest.agency : 0,
     bestParameters: initialBest ? initialBest.parameters : null,
     bestControl: initialBest ? initialBest.control : null,
+    lastSavedGeneration: storedLastGen ? parseInt(storedLastGen) : 0,
 
     // Actions
     togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
@@ -337,6 +341,49 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
                     timestamp: new Date(),
                     type: 'threshold_crossed'
                 });
+
+                // --- AGENT CAPTURE TRIGGER ---
+                // If this is a significant crossing and we haven't saved recently
+                const { lastSavedGeneration, aiHistory } = get();
+                if (nextState.generation - lastSavedGeneration > 100) { // Enforce 100 gen cooldown on saves
+                    console.log("[Library] Triggering Agent Capture...");
+
+                    // Execute async capture without blocking the loop too much
+                    // (We create the data snapshot synchronously)
+                    const snapshot: Omit<SavedAgent, 'name' | 'description' | 'tags'> = {
+                        id: crypto.randomUUID(),
+                        timestamp: new Date().toISOString(),
+                        generation: nextState.generation,
+                        metrics: {
+                            A: nextState.A,
+                            C: nextState.C,
+                            D: nextState.D,
+                            alertRate: nextState.alertRate
+                        },
+                        parameters: { ...parameters },
+                        environmentalControl: { ...control },
+                        historySnippet: [...aiHistory].slice(-10), // Last 10 actions
+                        validationMetrics: { ...get().validationMetrics },
+                        runContext: {
+                            bestAgencySoFar: get().bestAgency
+                        }
+                    };
+
+                    // Fire and forget (or handle in background)
+                    generateAgentDescription(snapshot).then(async (meta) => {
+                        if (meta) {
+                            const fullAgent: SavedAgent = { ...snapshot, ...meta };
+                            const win = window as any;
+                            if (win.api && win.api.saveAgent) {
+                                await win.api.saveAgent(fullAgent);
+                                console.log(`[Library] Agent Saved: ${meta.name}`);
+                                // Update store to block immediate re-save
+                                set({ lastSavedGeneration: nextState.generation });
+                                localStorage.setItem('fipsm_last_saved_gen', nextState.generation.toString());
+                            }
+                        }
+                    });
+                }
             }
         }
 
