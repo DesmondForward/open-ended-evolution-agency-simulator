@@ -52,7 +52,7 @@ const ParameterPanel: React.FC = () => {
             </div>
 
             {isOpen && (
-                <div style={{ padding: '16px', background: 'var(--color-bg)' }}>
+                <div style={{ padding: '16px', background: 'var(--color-bg)', maxHeight: '400px', overflowY: 'auto' }}>
                     <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>Coupling Rates</h4>
                     <ParamInput label="Diversity → Complexity (k_CD)" paramKey="k_CD" min={0} max={0.5} step={0.01} />
                     <ParamInput label="Complexity → Agency (k_AC)" paramKey="k_AC" min={0} max={0.5} step={0.01} />

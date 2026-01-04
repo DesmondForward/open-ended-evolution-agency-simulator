@@ -8,9 +8,12 @@ import {
     DEFAULT_INITIAL_STATE,
     DEFAULT_PARAMETERS,
     DEFAULT_CONTROL,
-    ValidationMetrics
+    ValidationMetrics,
+    AIHistoryEntry
 } from '../simulation/types';
 import { eulerMaruyamaStep, shouldTriggerAlert, calculateValidationMetrics } from '../simulation/sdeEngine';
+import { fetchAIControl } from '../services/aiService';
+import { WebGpuEngine } from '../simulation/webGpuEngine';
 
 interface SimulationStore {
     // State
@@ -22,23 +25,47 @@ interface SimulationStore {
     alerts: AlertEvent[];
     validationMetrics: ValidationMetrics;
 
+    // AI Control
+    isAIControlled: boolean;
+    aiStatus: 'idle' | 'thinking' | 'cooldown';
+    aiReasoning: string;
+    lastAiUpdate: Date | null;
+    aiHistory: AIHistoryEntry[];
+
+    // Persistence
+    bestAgency: number;
+    bestParameters: SimulationParameters | null;
+    bestControl: ControlSignal | null;
+
     // Actions
     togglePlay: () => void;
+    toggleAIControl: () => void;
     reset: () => void;
     setControl: (U: number) => void;
     updateParameters: (params: Partial<SimulationParameters>) => void;
-    step: () => void; // Single simulation step
+    loadBestParameters: () => void;
+    triggerAI: () => Promise<void>;
+    step: () => Promise<void>; // Async for GPU & AI
 }
 
 // Max telemetry points to keep in memory for charting
 const MAX_TELEMETRY_POINTS = 1000;
 
+// GPU Engine Instance & Lock
+const gpuEngine = new WebGpuEngine();
+let isGpuBusy = false;
+let isAiBusy = false; // Prevent overlapping AI calls
+
+// Load initial best from localStorage
+const storedBest = localStorage.getItem('fipsm_best_parameters');
+const initialBest = storedBest ? JSON.parse(storedBest) : null;
+
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
     // Initial State
     isPlaying: false,
     currentState: { ...DEFAULT_INITIAL_STATE },
-    parameters: { ...DEFAULT_PARAMETERS },
-    control: { ...DEFAULT_CONTROL },
+    parameters: initialBest ? { ...initialBest.parameters } : { ...DEFAULT_PARAMETERS },
+    control: initialBest && initialBest.control ? { ...initialBest.control } : { ...DEFAULT_CONTROL },
     telemetry: [],
     alerts: [],
     validationMetrics: {
@@ -46,15 +73,29 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
         diversityFloorViolationFraction: 0,
         controlBoundsViolationRate: 0
     },
+    isAIControlled: true,
+    aiStatus: 'idle',
+    aiReasoning: "Initializing AI Control...",
+    lastAiUpdate: null,
+    aiHistory: [],
+
+    // Persistence
+    bestAgency: initialBest ? initialBest.agency : 0,
+    bestParameters: initialBest ? initialBest.parameters : null,
+    bestControl: initialBest ? initialBest.control : null,
 
     // Actions
     togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+
+    toggleAIControl: () => set((state) => ({ isAIControlled: !state.isAIControlled })),
 
     reset: () => set({
         isPlaying: false,
         currentState: { ...DEFAULT_INITIAL_STATE },
         telemetry: [],
         alerts: [],
+        aiReasoning: "",
+        aiHistory: [],
         validationMetrics: {
             stateBoundsViolationRate: 0,
             diversityFloorViolationFraction: 0,
@@ -70,11 +111,214 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
         parameters: { ...state.parameters, ...newParams }
     })),
 
-    step: () => {
-        const { currentState, parameters, control, telemetry, alerts } = get();
+    loadBestParameters: () => {
+        const { bestParameters, bestControl } = get();
+        if (bestParameters) {
+            set((state) => ({
+                parameters: { ...bestParameters },
+                control: bestControl ? { ...bestControl } : state.control
+            }));
+            console.log("Restored Best Parameters & Control:", bestParameters, bestControl);
+        }
+    },
 
-        // Run integration step
-        const nextState = eulerMaruyamaStep(currentState, parameters, control);
+    triggerAI: async () => {
+        const { currentState, parameters, control, isAIControlled, aiHistory } = get();
+        if (!isAIControlled || isAiBusy) return;
+
+        isAiBusy = true;
+        set({ aiStatus: 'thinking' });
+        console.log(`[AI Spec] Manual Trigger... Gen: ${currentState.generation}`);
+
+        const stateBefore = { ...currentState };
+
+        try {
+            const { bestAgency, bestParameters, bestControl } = get();
+            const result = await fetchAIControl(currentState, parameters, control, aiHistory, bestAgency, bestParameters, bestControl);
+            if (result) {
+
+                // For simplicity/robustness: We'll store the entry with a pending outcome, or just the action.
+                // Actually, the user asked for "memory... to forward previous adjustment vs impact".
+                // So we need to calculate the impact of the LAST action.
+
+                // 1. Find last history entry and update its outcome based on CURRENT state vs OLD state (stored in it?)
+                // Too complex for this store.
+                // Simplified: Just record the action and the state AT THAT TIME.
+                // The AI can infer impact by comparing that entry's state vs current state.
+
+                const newEntry: AIHistoryEntry = {
+                    generation: currentState.generation,
+                    action: result.params ? `Updated Params: ${Object.keys(result.params).join(', ')}` : `Set U=${result.u.toFixed(2)}`,
+                    u: result.u,
+                    params: result.params,
+                    reasoning: result.reasoning,
+                    outcome: {
+                        A_before: stateBefore.A,
+                        A_after: -1, // To be filled or just compared by AI reading the history list vs current state
+                        delta_A: 0
+                    }
+                };
+
+                // Update previous entry's outcome if it exists
+                const currentHistory = get().aiHistory;
+                const updatedHistory = [...currentHistory];
+                if (updatedHistory.length > 0) {
+                    const lastEntry = updatedHistory[updatedHistory.length - 1];
+                    lastEntry.outcome.A_after = currentState.A;
+                    lastEntry.outcome.delta_A = currentState.A - lastEntry.outcome.A_before;
+                }
+
+                // Add new entry, keep last 10
+                updatedHistory.push(newEntry);
+                if (updatedHistory.length > 10) updatedHistory.shift();
+
+                set((state) => ({
+                    control: { ...state.control, U: result.u },
+                    parameters: result.params ? { ...state.parameters, ...result.params } : state.parameters,
+                    aiReasoning: result.reasoning,
+                    aiStatus: 'cooldown',
+                    lastAiUpdate: new Date(),
+                    aiHistory: updatedHistory
+                }));
+                console.log(`[AI Spec] Applied AI Control: U=${result.u}`);
+                if (result.params) {
+                    console.log(`[AI Spec] Applied Parameter Updates:`, result.params);
+                }
+
+                // Persist Log to CSV
+                const win = window as any;
+                if (win.api && win.api.logAIAction) {
+                    const { bestAgency } = get();
+                    win.api.logAIAction({
+                        generation: currentState.generation,
+                        action: result.params ? `Updated Params` : `Set U=${result.u.toFixed(2)}`,
+                        u: result.u,
+                        agency: currentState.A,
+                        bestAgency: bestAgency,
+                        params: result.params || {},
+                        reasoning: result.reasoning
+                    });
+                }
+            } else {
+                set({ aiStatus: 'idle' });
+            }
+        } catch (e) {
+            console.error("AI Manual Trigger Failed", e);
+            set({ aiStatus: 'idle' });
+        } finally {
+            isAiBusy = false;
+        }
+    },
+
+    step: async () => {
+        const { currentState, parameters, control, telemetry, alerts, isAIControlled } = get();
+
+        // ---------------- AI CONTROL ----------------
+        if (isAIControlled && !isAiBusy) {
+            // Time-based Frequency: Ensure at least 10 seconds between calls
+            const now = Date.now();
+            const lastUpdate = get().lastAiUpdate;
+            const timeSinceLast = lastUpdate ? now - lastUpdate.getTime() : Infinity;
+
+            const shouldCallAI = currentState.generation > 50 && timeSinceLast >= 10000;
+
+            if (shouldCallAI) {
+                isAiBusy = true;
+                set({ aiStatus: 'thinking' });
+                // Run in background 
+                console.log(`[AI Spec] Calling AI Service... Gen: ${currentState.generation}, Time since last: ${Math.round(timeSinceLast / 1000)}s`);
+
+                const { aiHistory, bestAgency, bestParameters, bestControl } = get();
+                const stateBefore = { ...currentState };
+
+                fetchAIControl(currentState, parameters, control, aiHistory, bestAgency, bestParameters, bestControl).then((result) => {
+                    if (result) {
+                        const newEntry: AIHistoryEntry = {
+                            generation: currentState.generation,
+                            action: result.params ? `Updated Params: ${Object.keys(result.params).join(', ')}` : `Set U=${result.u.toFixed(2)}`,
+                            u: result.u,
+                            params: result.params,
+                            reasoning: result.reasoning,
+                            outcome: {
+                                A_before: stateBefore.A,
+                                A_after: -1,
+                                delta_A: 0
+                            }
+                        };
+
+                        set((state) => {
+                            const updatedHistory = [...state.aiHistory];
+                            // Update previous outcome
+                            if (updatedHistory.length > 0) {
+                                const lastEntry = updatedHistory[updatedHistory.length - 1];
+                                lastEntry.outcome.A_after = stateBefore.A; // Using state at start of async call as "after" for previous
+                                lastEntry.outcome.delta_A = stateBefore.A - lastEntry.outcome.A_before;
+                            }
+                            updatedHistory.push(newEntry);
+                            if (updatedHistory.length > 10) updatedHistory.shift();
+
+                            return {
+                                control: { ...state.control, U: result.u },
+                                parameters: result.params ? { ...state.parameters, ...result.params } : state.parameters,
+                                aiReasoning: result.reasoning,
+                                aiStatus: 'cooldown',
+                                lastAiUpdate: new Date(),
+                                aiHistory: updatedHistory
+                            };
+                        });
+                        console.log(`[AI Spec] Applied AI Control: U=${result.u}`);
+                        if (result.params) {
+                            console.log(`[AI Spec] Applied Parameter Updates:`, result.params);
+                        }
+
+                        // Persist Log to CSV
+                        const win = window as any;
+                        if (win.api && win.api.logAIAction) {
+                            const { bestAgency } = get();
+                            win.api.logAIAction({
+                                generation: currentState.generation,
+                                action: result.params ? `Updated Params` : `Set U=${result.u.toFixed(2)}`,
+                                u: result.u,
+                                agency: currentState.A,
+                                bestAgency: bestAgency,
+                                params: result.params || {},
+                                reasoning: result.reasoning
+                            });
+                        }
+                    } else {
+                        set({ aiStatus: 'idle' });
+                    }
+                    isAiBusy = false;
+                }).catch((e) => {
+                    console.error("AI Auto Trigger Failed", e);
+                    set({ aiStatus: 'idle' });
+                    isAiBusy = false;
+                });
+            }
+        }
+        // --------------------------------------------
+
+        // Prevent concurrent GPU steps
+        if (parameters.useGPU && isGpuBusy) return;
+
+        let nextState: SimulationState;
+
+        if (parameters.useGPU) {
+            isGpuBusy = true;
+            try {
+                // Ensure initialized (fast simulation, ok to check every frame)
+                await gpuEngine.initialize();
+                nextState = await gpuEngine.step(parameters, control, currentState);
+            } catch (error) {
+                console.error("GPU Simulation Step Failed:", error);
+                isGpuBusy = false;
+                return; // Skip update
+            }
+            isGpuBusy = false;
+        } else {
+            // CPU Step
+            nextState = eulerMaruyamaStep(currentState, parameters, control);
+        }
 
         // Check for alerts
         let newAlerts = [...alerts];
@@ -128,6 +372,22 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
                 ...calculateValidationMetrics(historyWindow, parameters),
                 controlBoundsViolationRate: 0 // U is hard coded to be within bounds via slider
             };
+        }
+
+        // Track Best Agency
+        const { bestAgency } = get();
+        if (nextState.A > bestAgency) {
+            set({
+                bestAgency: nextState.A,
+                bestParameters: { ...parameters },
+                bestControl: { ...control }
+            });
+            // Auto-save to localStorage
+            localStorage.setItem('fipsm_best_parameters', JSON.stringify({
+                agency: nextState.A,
+                parameters: parameters,
+                control: control
+            }));
         }
 
         set({

@@ -2,7 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
-    // Expose any IPC methods here if needed
+    // Expose logAIAction for persistent logging
+    logAIAction: (data: any) => ipcRenderer.invoke('log-ai-action', data),
+    // Expose openLogsFolder
+    openLogsFolder: () => ipcRenderer.invoke('open-logs-folder')
 }
 
 if (process.contextIsolated) {

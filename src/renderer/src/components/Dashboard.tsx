@@ -7,6 +7,7 @@ import SimulationControls from './SimulationControls';
 import AlertPanel from './AlertPanel';
 import ParameterPanel from './ParameterPanel';
 import ValidationPanel from './ValidationPanel';
+import { AIControlPanel } from './AIControlPanel';
 
 const Dashboard: React.FC = () => {
     const { isPlaying, step } = useSimulationStore();
@@ -46,6 +47,7 @@ const Dashboard: React.FC = () => {
                 <StateGauges />
                 <MetricsChart />
                 <SimulationControls />
+                <AIControlPanel />
             </div>
 
             {/* Right Column: Controls & Info */}

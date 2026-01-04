@@ -3,7 +3,7 @@ import { useSimulationStore } from '../store/simulationStore';
 import { AlertTriangle, Info } from 'lucide-react';
 
 const ControlPanel: React.FC = () => {
-    const { control, setControl, currentState } = useSimulationStore();
+    const { control, setControl, currentState, bestAgency, bestParameters, loadBestParameters } = useSimulationStore();
 
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setControl(parseFloat(e.target.value));
@@ -71,6 +71,77 @@ const ControlPanel: React.FC = () => {
                     <span>Warning: High difficulty with low diversity risks collapse! Reduce U.</span>
                 </div>
             )}
+
+            {/* Persistence Controls */}
+            {bestAgency > 0 && (
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>Best Agency Record:</span>
+                        <span style={{ fontWeight: 600, color: '#4ade80' }}>{bestAgency.toFixed(4)}</span>
+                    </div>
+                </div>
+            )}
+            {bestParameters && (
+                <button
+                    onClick={loadBestParameters}
+                    style={{
+                        width: '100%',
+                        padding: '8px',
+                        background: 'var(--color-surface-hover)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--color-text-primary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.85rem',
+                        transition: 'background 0.2s',
+                        marginTop: '8px'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = 'var(--color-border)'}
+                    onMouseOut={(e) => e.currentTarget.style.background = 'var(--color-surface-hover)'}
+                >
+                    <span>↺ Restore Best Parameters</span>
+                </button>
+            )}
+
+            {/* Open Logs Button */}
+            <button
+                onClick={() => {
+                    const win = window as any;
+                    if (win.api && win.api.openLogsFolder) {
+                        win.api.openLogsFolder();
+                    }
+                }}
+                style={{
+                    width: '100%',
+                    padding: '8px',
+                    background: 'transparent',
+                    border: '1px dashed var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.8rem',
+                    marginTop: '12px',
+                    transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                    e.currentTarget.style.borderColor = 'var(--color-text-secondary)';
+                }}
+                onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                }}
+            >
+                <span>📂 Open AI Logs Folder</span>
+            </button>
         </div>
     );
 };

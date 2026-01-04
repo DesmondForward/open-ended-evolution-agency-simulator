@@ -25,10 +25,19 @@ The core simulation engine utilizes **Euler-Maruyama integration** to solve the 
 4.  **Alert Rate** ($dA_{alert}$):
     $$dA_{alert\_rate} = \frac{1}{\tau} \cdot \sigma(\frac{A - A_{alert}}{\epsilon})dt$$
     *Smooths the detection signal to identify robust threshold crossings indicating emergent agency.*
+    
+## 🧠 AI-Driven Control
+
+The simulator features a "Hyper-Intelligent Researcher" mode powered by **GPT-5.2** (or compatible LLMs). The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
+-   **Environmental Difficulty ($U$)**: To challenge the system or protect it from collapse.
+-   **SDE Parameters**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, etc.) to steer the system towards higher Agency.
+
+The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress and adaptation.
 
 ## ✨ Features
 
 -   **Real-time SDE Integration**: High-performance Euler-Maruyama solver running at 60fps (default).
+-   **AI Parameter Tuning**: Autonomous optimization of simulation parameters by an LLM agent.
 -   **Agency Detection System**: Automated monitoring system that triggers alerts when agency ($A$) crosses critical thresholds.
 -   **Interactive Dashboard**:
     -   Live telemetry charts for $C$, $D$, and $A$.
@@ -43,6 +52,7 @@ The core simulation engine utilizes **Euler-Maruyama integration** to solve the 
 
 -   Node.js (v18+ recommended)
 -   npm or yarn
+-   **OpenAI API Key**: Required for AI control features (set as `VITE_AI_API_KEY`).
 
 ### Installation
 
@@ -57,12 +67,18 @@ The core simulation engine utilizes **Euler-Maruyama integration** to solve the 
     npm install
     ```
 
-3.  Start the development server:
+3.  Configure Environment:
+    Create a `.env` file in the project root:
+    ```env
+    VITE_AI_API_KEY=your_openai_api_key_here
+    ```
+
+4.  Start the development server:
     ```bash
     npm run dev
     ```
 
-4.  Build for production:
+5.  Build for production:
     ```bash
     npm run build
     ```

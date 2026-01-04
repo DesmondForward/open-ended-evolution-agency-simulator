@@ -47,6 +47,8 @@ export interface SimulationParameters {
     A_alert: number;
     /** Timestep size (generations) */
     dt: number;
+    /** Whether to use GPU for compute (Ensemble Mode) */
+    useGPU?: boolean;
 }
 
 /** Known quantities from the PRD */
@@ -82,6 +84,20 @@ export interface AlertEvent {
     type: 'threshold_crossed' | 'sustained_high' | 'peak';
 }
 
+/** History entry for AI actions */
+export interface AIHistoryEntry {
+    generation: number;
+    action: string;
+    u: number;
+    params?: Partial<SimulationParameters>;
+    reasoning: string;
+    outcome: {
+        A_before: number;
+        A_after: number;
+        delta_A: number;
+    };
+}
+
 /** Validation metrics from the PRD */
 export interface ValidationMetrics {
     stateBoundsViolationRate: number;
@@ -110,7 +126,8 @@ export const DEFAULT_PARAMETERS: SimulationParameters = {
     tau: 5,
     eps: 0.05,
     A_alert: 0.7,
-    dt: 0.1
+    dt: 0.1,
+    useGPU: false
 };
 
 /** Default control signal */

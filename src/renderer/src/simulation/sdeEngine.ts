@@ -37,7 +37,7 @@ function clamp01(value: number): number {
 /**
  * Compute the drift terms for the SDE system
  */
-function computeDrift(
+export function computeDrift(
     state: SimulationState,
     params: SimulationParameters,
     control: ControlSignal
