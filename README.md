@@ -2,7 +2,7 @@
 
 A specialized research tool for simulating and detecting emergent agency in open-ended evolutionary systems. This application implements a Stochastic Differential Equation (SDE) engine to model the dynamics of Complexity, Diversity, and Agency within a theoretical ecosystem.
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg)
 
 ## 🔬 Scientific Background
 
@@ -28,25 +28,32 @@ The core simulation engine utilizes **Euler-Maruyama integration** to solve the 
 
 ## 🧠 AI-Driven Control
 
-The simulator features a "Hyper-Intelligent Researcher" mode powered by **GPT-5.2-2025-12-11**. The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
+The simulator features a dual-role AI system powered by **GPT-5.2-2025-12-11**:
+
+### 1. The Hyper-Intelligent Researcher
+The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
 -   **Environmental Difficulty ($U$)**: To challenge the system or protect it from collapse.
 -   **Full SDE Parameter Tuning**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, $k_{C\_decay}$, etc.) and noise levels ($\sigma$) to steer the system.
 -   **Strategy & Memory**: The AI maintains a history of its actions to analyze the effectiveness of its interventions over time.
 
-The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress and adaptation.
+### 2. The Xenobiologist
+When the system successfully crosses the Agency Threshold ($A > 0.75$), the AI assumes the role of a Xenobiologist:
+-   **Analysis**: Reviews the history and parameter "DNA" that led to emergence.
+-   **Classification**: Generates a scientific name, "Spec Sheet" description, and tags for the new agent.
+-   **Archival**: Saves the agent to the **Universal Agent Library**.
 
 ## ✨ Features
 
 -   **Real-time SDE Integration**: High-performance Euler-Maruyama solver.
+-   **Universal Agent Library**: A persistent collection of discovered "Agents" (agency peaks), complete with their parameter "DNA", emergence history, and AI-generated lore.
 -   **WebGPU Acceleration**: Optional GPU-based compute for potentially massive parallel simulations (Experimental).
 -   **AI Parameter Tuning**: Autonomous optimization of simulation parameters by an LLM agent.
--   **AI Action Logging**: Comprehensive CSV logging of all AI decisions, reasoning, and parameter changes for analysis.
--   **Agency Detection System**: Automated monitoring system that triggers alerts when agency ($A$) crosses critical thresholds.
+-   **Agency Detection System**: Automated monitoring system that triggers alerts when agency ($A$) crosses critical thresholds, logging events to the **Agency Detection Log**.
 -   **Interactive Dashboard**:
     -   Live telemetry charts for $C$, $D$, and $A$.
     -   Real-time "Agency Alert" logging.
     -   Environment Control Slider ($U$ - Novelty/Difficulty).
-    -   Direct access to logs via "Open Log Folder".
+    -   Universal Library browser.
 -   **Validation Framework**: Built-in metrics to track state bounds violations and diversity floor compliance.
 -   **Modern Tech Stack**: Built with Electron, React, TypeScript, and Zustand for state management.
 
@@ -96,7 +103,10 @@ The AI's goal is to maximize the emergence of Agency ($A$) by balancing stress a
 │   ├── preload/              # Electron preload scripts
 │   └── renderer/             # React frontend
 │       ├── src/
-│       │   ├── components/   # UI Components (Dashboard, Charts)
+│       │   ├── components/   # UI Components
+│       │   │   ├── LibraryView.tsx   # Universal Agent Library
+│       │   │   ├── AIControlPanel.tsx
+│       │   │   └── AlertPanel.tsx    # Agency Detection Log
 │       │   ├── services/     # External Services (AI Integration)
 │       │   │   └── aiService.ts
 │       │   ├── simulation/   # Core SDE Engine Logic
