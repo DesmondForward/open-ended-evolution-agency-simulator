@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { SavedAgent } from '../simulation/types';
+import 'katex/dist/katex.min.css';
+import { InlineMath } from 'react-katex';
+import { Eye } from 'lucide-react';
+import AgentPreviewModal from './AgentPreviewModal';
 
 interface LibraryViewProps {
     onClose: () => void;
@@ -9,6 +13,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose }) => {
     const [agents, setAgents] = useState<SavedAgent[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedAgent, setSelectedAgent] = useState<SavedAgent | null>(null);
+    const [showPreview, setShowPreview] = useState(false);
 
     useEffect(() => {
         const fetchAgents = async () => {
@@ -32,6 +37,28 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose }) => {
                 if (selectedAgent?.id === id) setSelectedAgent(null);
             }
         }
+    };
+
+    const generateEquation = (agent: SavedAgent) => {
+        const { k_AC = 0.5, k_AU = 0.5, k_A_decay = 0.35, sigma_A = 0.005 } = agent.parameters;
+        const U = agent.environmentalControl?.U || 0;
+
+        // Calculate the effective coefficient for the drift term
+        // Growth = (k_AC * C + k_AU * U * C) * (1 - A)
+        //        = (k_AC + k_AU * U) * C * (1 - A)
+        const effectiveGrowthCoeff = (k_AC + k_AU * U).toFixed(4);
+        const decayRate = Number(k_A_decay).toFixed(4);
+        const sigma = Number(sigma_A).toFixed(3);
+
+        // Generate LaTeX string
+        // dA = \underbrace{ ( coeff * C * (1-A) - decay * A ) }_{\text{Deterministic Drift}} dt + \underbrace{ sigma }_{\text{Noise}} dW_A
+        return `dA = \\underbrace{\\big( ${effectiveGrowthCoeff} \\, C \\, (1-A) - ${decayRate} \\, A \\big)}_{\\text{Deterministic Drift}} dt + \\underbrace{${sigma}}_{\\text{Noise}} dW_A`;
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Equation copied to clipboard!");
+        });
     };
 
     return (
@@ -159,9 +186,62 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose }) => {
                             <div style={{
                                 background: '#000', padding: '16px', borderRadius: '8px',
                                 fontFamily: 'monospace', fontSize: '0.9rem', overflowX: 'auto',
-                                border: '1px solid #333'
+                                border: '1px solid #333', marginBottom: '32px'
                             }}>
                                 {JSON.stringify(selectedAgent.parameters, null, 2)}
+                            </div>
+
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                Final Stochastic Form
+                                <button
+                                    onClick={() => copyToClipboard(generateEquation(selectedAgent))}
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        color: 'var(--color-text-secondary)',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        padding: '4px 8px',
+                                        transition: 'background 0.2s',
+                                    }}
+                                    title="Copy equation to clipboard"
+                                >
+                                    Copy LaTeX
+                                </button>
+                                <button
+                                    onClick={() => setShowPreview(true)}
+                                    style={{
+                                        background: 'rgba(0, 255, 136, 0.1)',
+                                        border: '1px solid rgba(0, 255, 136, 0.3)',
+                                        borderRadius: '4px',
+                                        color: '#00ff88',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        padding: '4px 12px',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                    title="View 3D Dynamics"
+                                >
+                                    <Eye size={14} />
+                                    Preview Agent
+                                </button>
+                            </h3>
+                            <div style={{
+                                background: 'var(--color-surface)',
+                                padding: '24px',
+                                borderRadius: '8px',
+                                fontSize: '1.2rem',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                border: '1px solid var(--color-border)',
+                                minHeight: '80px'
+                            }}>
+                                <InlineMath math={generateEquation(selectedAgent)} />
                             </div>
 
                             <h3 style={{ marginTop: '32px' }}>Emergence History</h3>
@@ -185,6 +265,12 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose }) => {
                     )}
                 </div>
             </div>
+            {showPreview && selectedAgent && (
+                <AgentPreviewModal
+                    agent={selectedAgent}
+                    onClose={() => setShowPreview(false)}
+                />
+            )}
         </div>
     );
 };
