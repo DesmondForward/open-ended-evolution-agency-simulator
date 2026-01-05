@@ -1,0 +1,67 @@
+{
+  "id": "2745fba2-5b8f-46fa-9e3f-c9982043029a",
+  "timestamp": "2026-01-04T16:09:01.365Z",
+  "generation": 104.89999999999831,
+  "metrics": {
+    "A": 0.9968137763348505,
+    "C": 0.8285487071956258,
+    "D": 1,
+    "alertRate": 19.846533589921844
+  },
+  "parameters": {
+    "k_CD": 0.46,
+    "k_AC": 0.49,
+    "k_DU": 0.002,
+    "k_U": 0.35,
+    "sigma_C": 0.005,
+    "sigma_D": 0.02,
+    "sigma_A": 0.005,
+    "tau": 5,
+    "eps": 0.05,
+    "A_alert": 0.75,
+    "dt": 0.1,
+    "useGPU": false,
+    "k_C_decay": 0.1,
+    "k_D_growth": 0.5,
+    "k_D_decay": 0.02,
+    "k_AU": 0.99,
+    "k_A_decay": 0.002
+  },
+  "environmentalControl": {
+    "U": 0.1
+  },
+  "historySnippet": [
+    {
+      "generation": 50.00000000000044,
+      "action": "Updated Params: k_A_decay, k_D_decay",
+      "u": 0.1,
+      "params": {
+        "k_A_decay": 0.002,
+        "k_D_decay": 0.02
+      },
+      "reasoning": "Agency is already safely above 0.75 but is fading (dA/dt<0) while diversity is slightly collapsing, so I’ll keep U near the best-record value yet slightly boost agency sustain by reducing k_A_decay and modestly relieve diversity pressure by lowering k_D_decay.",
+      "outcome": {
+        "A_before": 0.9955546370723793,
+        "A_after": -1,
+        "delta_A": 0
+      }
+    }
+  ],
+  "validationMetrics": {
+    "stateBoundsViolationRate": 0,
+    "diversityFloorViolationFraction": 0,
+    "controlBoundsViolationRate": 0
+  },
+  "runContext": {
+    "bestAgencySoFar": 1
+  },
+  "name": "Quasi-Equilibrium Agency Weaver",
+  "description": "This agent crossed the Agency Threshold by operating in a low-difficulty niche (U=0.10) where its near-maximal difficulty-to-agency coupling (k_AU=0.99) could steadily convert environmental signal into coherent action without destabilizing. After the Gen 50 parameter update increased decay pressure (k_A_decay and k_D_decay), it avoided collapse by keeping agency decay extremely low (k_A_decay=0.002) and maintaining tight noise control (sigma_A=0.005, sigma_C=0.005), allowing complexity to build (C=0.829) while preserving maximal diversity (D=1.000).",
+  "tags": [
+    "Low-Noise",
+    "Diversity-Maximizer",
+    "Near-Threshold",
+    "Resilient-to-Decay",
+    "Complexity-Balanced"
+  ]
+}

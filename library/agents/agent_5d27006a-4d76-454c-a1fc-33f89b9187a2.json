@@ -1,0 +1,193 @@
+{
+  "id": "5d27006a-4d76-454c-a1fc-33f89b9187a2",
+  "timestamp": "2026-01-04T16:31:21.574Z",
+  "generation": 3910.9999999975385,
+  "metrics": {
+    "A": 0.994346237367232,
+    "C": 0.841696536522137,
+    "D": 0.9808394019906543,
+    "alertRate": 767.1410145557224
+  },
+  "parameters": {
+    "k_CD": 0.5,
+    "k_AC": 0.5,
+    "k_DU": 0,
+    "k_U": 0.35,
+    "sigma_C": 0.005,
+    "sigma_D": 0.02,
+    "sigma_A": 0.005,
+    "tau": 5,
+    "eps": 0.05,
+    "A_alert": 0.75,
+    "dt": 0.1,
+    "useGPU": false,
+    "k_C_decay": 0.1,
+    "k_D_growth": 0.5,
+    "k_D_decay": 0.0015,
+    "k_AU": 1,
+    "k_A_decay": 0.0015
+  },
+  "environmentalControl": {
+    "U": 0.1
+  },
+  "historySnippet": [
+    {
+      "generation": 3535.39999999788,
+      "action": "Updated Params: k_D_decay",
+      "u": 0.1,
+      "params": {
+        "k_D_decay": 0.01
+      },
+      "reasoning": "A is already safely above 0.75 but is slightly fading while D is collapsing, so I’ll keep U at the proven-best 0.10 and counter the D drop by reducing k_D_decay (recent k_D_decay tweaks often hurt A, so this is a small, conservative nudge) to stabilize diversity without adding selection pressure (k_DU stays at 0).",
+      "outcome": {
+        "A_before": 0.9917788672921879,
+        "A_after": 0.9853129938764976,
+        "delta_A": -0.006465873415690271
+      }
+    },
+    {
+      "generation": 3571.9999999978468,
+      "action": "Updated Params: k_D_decay",
+      "u": 0.1,
+      "params": {
+        "k_D_decay": 0.005
+      },
+      "reasoning": "Agency is already well above the 0.75 objective and still rising, while Diversity is starting to collapse (dD/dt=-0.0057), so I’ll keep U at the best-record level (0.10) and reduce diversity decay slightly (a lever we’ve repeatedly tuned in history) to stabilize D without risking an A drop.",
+      "outcome": {
+        "A_before": 0.9853129938764976,
+        "A_after": 0.9816132232247302,
+        "delta_A": -0.003699770651767409
+      }
+    },
+    {
+      "generation": 3619.099999997804,
+      "action": "Updated Params: k_A_decay",
+      "u": 0.1,
+      "params": {
+        "k_A_decay": 0.003
+      },
+      "reasoning": "Agency is already well above the 0.75 objective and still rising (dA/dt>0) while C is slightly decaying, so I’ll keep U at the best-record level (0.10) and make a small sustaining tweak by lowering k_A_decay (which previously improved A at Gen 3411.7) without adding diversity pressure (k_DU stays 0).",
+      "outcome": {
+        "A_before": 0.9816132232247302,
+        "A_after": 0.9925118370886956,
+        "delta_A": 0.0108986138639654
+      }
+    },
+    {
+      "generation": 3647.9999999977776,
+      "action": "Updated Params: k_A_decay",
+      "u": 0.1,
+      "params": {
+        "k_A_decay": 0.002
+      },
+      "reasoning": "Agency is already well above the 0.75 threshold and still rising (dA/dt>0), so to take a calculated risk without destabilizing we keep U at the best-record value and make a small sustaining tweak by lowering k_A_decay slightly (since past reductions improved A while heavy multi-parameter changes sometimes hurt).",
+      "outcome": {
+        "A_before": 0.9925118370886956,
+        "A_after": 0.9915013842909322,
+        "delta_A": -0.0010104527977634614
+      }
+    },
+    {
+      "generation": 3688.5999999977407,
+      "action": "Updated Params: k_D_decay",
+      "u": 0.1,
+      "params": {
+        "k_D_decay": 0.002
+      },
+      "reasoning": "Agency is already safely above 0.75 and still rising (dA/dt>0) while Diversity is starting to collapse (dD/dt<0), so I’ll keep U at the proven best (0.10) and reduce only D-loss pressure (k_D_decay) to stabilize D without risking the recent A sensitivity seen in prior multi-parameter tweaks.",
+      "outcome": {
+        "A_before": 0.9915013842909322,
+        "A_after": 0.9873793642481373,
+        "delta_A": -0.004122020042794827
+      }
+    },
+    {
+      "generation": 3719.8999999977123,
+      "action": "Updated Params: k_A_decay, k_AU, k_AC, k_U",
+      "u": 0.18,
+      "params": {
+        "k_A_decay": 0.002,
+        "k_AU": 1,
+        "k_AC": 0.5,
+        "k_U": 0.38
+      },
+      "reasoning": "Agency is already well above the 0.75 objective and still rising (dA/dt=0.0044), so to take a calculated risk for richer emergent behavior without collapsing diversity (D≈0.98, k_DU=0), I’ll run a mild “challenge phase” by increasing U while keeping decay low and stimulation high (historically, lowering k_A_decay improved A at Gen 3619.1).",
+      "outcome": {
+        "A_before": 0.9873793642481373,
+        "A_after": 0.9927968088408031,
+        "delta_A": 0.005417444592665799
+      }
+    },
+    {
+      "generation": 3767.699999997669,
+      "action": "Updated Params: k_D_decay, k_U",
+      "u": 0.12,
+      "params": {
+        "k_D_decay": 0.0015,
+        "k_U": 0.35
+      },
+      "reasoning": "A is already >0.75 and still rising, but D has started to drift down, so I’ll run a mild “challenge” step by nudging U toward the best-record regime while slightly reducing D’s intrinsic decay to prevent a diversity crash (since recent k_D_decay tweaks often hurt A).",
+      "outcome": {
+        "A_before": 0.9927968088408031,
+        "A_after": 0.990031736263897,
+        "delta_A": -0.002765072576906169
+      }
+    },
+    {
+      "generation": 3810.09999999763,
+      "action": "Updated Params: k_D_decay",
+      "u": 0.1,
+      "params": {
+        "k_D_decay": 0.0015
+      },
+      "reasoning": "Agency is already well above the 0.75 objective and still rising (dA/dt>0), while Diversity is starting to collapse (dD/dt<0), so I’ll revert U toward the best-record setting (0.10) and slightly reduce diversity decay to stabilize D without sacrificing A (noting prior k_A_decay tweaks were beneficial but we’ll avoid more volatility).",
+      "outcome": {
+        "A_before": 0.990031736263897,
+        "A_after": 0.9945145054400256,
+        "delta_A": 0.004482769176128665
+      }
+    },
+    {
+      "generation": 3850.899999997593,
+      "action": "Set U=0.10",
+      "u": 0.1,
+      "reasoning": "Agency is already well above the 0.75 threshold and still rising; since the best record occurred at U=0.10 and recent tweaks to k_D_decay/k_A_decay caused mixed or negative swings, hold U at the proven optimum and avoid destabilizing parameter changes while A consolidates near 1.0.",
+      "outcome": {
+        "A_before": 0.9945145054400256,
+        "A_after": 0.9937234670304399,
+        "delta_A": -0.0007910384095857204
+      }
+    },
+    {
+      "generation": 3892.0999999975556,
+      "action": "Updated Params: k_A_decay",
+      "u": 0.1,
+      "params": {
+        "k_A_decay": 0.0015
+      },
+      "reasoning": "Agency is already well above the 0.75 threshold and still rising while D is only slightly declining; since best performance occurred at U=0.10 and recent mixed parameter tweaks sometimes hurt A, keep U at the proven setting and make a small stabilizing reduction to k_A_decay (which previously improved A) without adding diversity pressure.",
+      "outcome": {
+        "A_before": 0.9937234670304399,
+        "A_after": -1,
+        "delta_A": 0
+      }
+    }
+  ],
+  "validationMetrics": {
+    "stateBoundsViolationRate": 0,
+    "diversityFloorViolationFraction": 0,
+    "controlBoundsViolationRate": 0
+  },
+  "runContext": {
+    "bestAgencySoFar": 1
+  },
+  "name": "Low-U Agency Anchorage",
+  "description": "This agent emerged as a tightly-regulated controller that converts environmental pressure into action (k_AU=1) while damping volatility via short memory (tau=5) and very low agency noise (sigma_A=0.005). Its lineage shows repeated sensitivity to diversity decay tuning (multiple k_D_decay changes often dropped Agency), but the decisive rise came when coupling terms and environment handling were rebalanced together (Gen 3719: k_A_decay, k_AU, k_AC, k_U → Agency rose), allowing it to recover even after the imposed difficulty shift to U=0.10 briefly suppressed performance.",
+  "tags": [
+    "Coupling-Tuned",
+    "Low-Noise",
+    "Diversity-Sensitive",
+    "Resilient-to-Difficulty",
+    "High-Agency"
+  ]
+}
