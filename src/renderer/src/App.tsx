@@ -1,9 +1,38 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import LibraryView from './components/LibraryView'
+import { useSimulationStore } from './store/simulationStore'
 
 function App(): JSX.Element {
     const [showLibrary, setShowLibrary] = useState(false);
+
+    const togglePlay = useSimulationStore((state) => state.togglePlay);
+    const reset = useSimulationStore((state) => state.reset);
+    const loadAgents = useSimulationStore((state) => state.loadAgents);
+
+    // Load agents on mount
+    useEffect(() => {
+        loadAgents();
+    }, [loadAgents]);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.code === 'Space') {
+                event.preventDefault();
+                togglePlay();
+            }
+            if (event.code === 'KeyR' && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                reset();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [togglePlay, reset]);
 
     return (
         <div className="app-container" style={{ height: '100vh', width: '100vw', background: 'var(--color-bg)' }}>

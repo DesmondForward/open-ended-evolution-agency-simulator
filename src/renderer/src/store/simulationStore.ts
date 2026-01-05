@@ -26,6 +26,9 @@ interface SimulationStore {
     alerts: AlertEvent[];
     validationMetrics: ValidationMetrics;
 
+    // Agent Library
+    savedAgents: SavedAgent[];
+
     // AI Control
     isAIControlled: boolean;
     aiStatus: 'idle' | 'thinking' | 'cooldown';
@@ -48,6 +51,7 @@ interface SimulationStore {
     loadBestParameters: () => void;
     triggerAI: () => Promise<void>;
     step: () => Promise<void>; // Async for GPU & AI
+    loadAgents: () => Promise<void>;
 }
 
 // Max telemetry points to keep in memory for charting
@@ -67,7 +71,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     // Initial State
     isPlaying: false,
     currentState: { ...DEFAULT_INITIAL_STATE },
-    parameters: initialBest ? { ...initialBest.parameters } : { ...DEFAULT_PARAMETERS },
+    // Robustly merge defaults to ensure new parameters (k_C_decay etc) exist even if localStorage is old
+    parameters: initialBest ? { ...DEFAULT_PARAMETERS, ...initialBest.parameters } : { ...DEFAULT_PARAMETERS },
     control: initialBest && initialBest.control ? { ...initialBest.control } : { ...DEFAULT_CONTROL },
     telemetry: [],
     alerts: [],
@@ -76,6 +81,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
         diversityFloorViolationFraction: 0,
         controlBoundsViolationRate: 0
     },
+    savedAgents: [],
     isAIControlled: true,
     aiStatus: 'idle',
     aiReasoning: "Initializing AI Control...",
@@ -119,7 +125,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
         const { bestParameters, bestControl } = get();
         if (bestParameters) {
             set((state) => ({
-                parameters: { ...bestParameters },
+                parameters: { ...DEFAULT_PARAMETERS, ...bestParameters },
                 control: bestControl ? { ...bestControl } : state.control
             }));
             console.log("Restored Best Parameters & Control:", bestParameters, bestControl);
@@ -137,8 +143,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
         const stateBefore = { ...currentState };
 
         try {
-            const { bestAgency, bestParameters, bestControl } = get();
-            const result = await fetchAIControl(currentState, parameters, control, aiHistory, bestAgency, bestParameters, bestControl);
+            const { bestAgency, bestParameters, bestControl, savedAgents } = get();
+            const result = await fetchAIControl(currentState, parameters, control, aiHistory, bestAgency, bestParameters, bestControl, savedAgents);
             if (result) {
 
                 // For simplicity/robustness: We'll store the entry with a pending outcome, or just the action.
@@ -232,10 +238,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
                 // Run in background 
                 console.log(`[AI Spec] Calling AI Service... Gen: ${currentState.generation}, Time since last: ${Math.round(timeSinceLast / 1000)}s`);
 
-                const { aiHistory, bestAgency, bestParameters, bestControl } = get();
+                const { aiHistory, bestAgency, bestParameters, bestControl, savedAgents } = get();
                 const stateBefore = { ...currentState };
 
-                fetchAIControl(currentState, parameters, control, aiHistory, bestAgency, bestParameters, bestControl).then((result) => {
+                fetchAIControl(currentState, parameters, control, aiHistory, bestAgency, bestParameters, bestControl, savedAgents).then((result) => {
                     if (result) {
                         const newEntry: AIHistoryEntry = {
                             generation: currentState.generation,
@@ -378,7 +384,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
                                 await win.api.saveAgent(fullAgent);
                                 console.log(`[Library] Agent Saved: ${meta.name}`);
                                 // Update store to block immediate re-save
-                                set({ lastSavedGeneration: nextState.generation });
+                                set((state) => ({
+                                    lastSavedGeneration: nextState.generation,
+                                    savedAgents: [...state.savedAgents, fullAgent] // Add to local state immediately
+                                }));
                                 localStorage.setItem('fipsm_last_saved_gen', nextState.generation.toString());
                             }
                         }
@@ -443,5 +452,18 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
             alerts: newAlerts,
             validationMetrics: newMetrics
         });
+    },
+
+    loadAgents: async () => {
+        const win = window as any;
+        if (win.api && win.api.getAgents) {
+            try {
+                const agents = await win.api.getAgents();
+                set({ savedAgents: agents });
+                console.log(`[SimulationStore] Loaded ${agents.length} agents from library.`);
+            } catch (e) {
+                console.error("[SimulationStore] Failed to load agents:", e);
+            }
+        }
     }
 }));

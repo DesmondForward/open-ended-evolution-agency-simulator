@@ -15,7 +15,8 @@ export const fetchAIControl = async (
     history: AIHistoryEntry[] = [],
     bestAgency: number = 0,
     bestParams: SimulationParameters | null = null,
-    bestControl: ControlSignal | null = null
+    bestControl: ControlSignal | null = null,
+    savedAgents: SavedAgent[] = []
 ): Promise<{ u: number; reasoning: string; params?: Partial<SimulationParameters> } | null> => {
     const apiKey = import.meta.env.VITE_AI_API_KEY;
     // Force standard OpenAI endpoint to resolve configuration issues
@@ -42,6 +43,31 @@ export const fetchAIControl = async (
         dD: drift.dD / currentParams.dt,
         dA: drift.dA / currentParams.dt
     };
+
+    // --- Agent Library DNA Analysis ---
+    // Provide ALL agents in a compact format so the AI can select from the full history
+    // Sort by Agency descending so high performers are at the top, but include everyone.
+    const allAgents = [...savedAgents]
+        .sort((a, b) => b.metrics.A - a.metrics.A);
+
+    let agentContext = "";
+    if (allAgents.length > 0) {
+        // Compact format: One line per agent to save tokens while providing full data
+        // [Name] (A=...) P:{...} U:...
+        const agentLines = allAgents.map(agent => {
+            // Round params to 3 decimals to save space
+            const p = agent.parameters;
+            const paramsStr = `k_CD:${p.k_CD.toFixed(2)},k_AC:${p.k_AC.toFixed(2)},k_DU:${p.k_DU.toFixed(2)},k_U:${p.k_U.toFixed(2)},k_C_dec:${p.k_C_decay.toFixed(2)},k_D_gro:${p.k_D_growth.toFixed(2)},k_D_dec:${p.k_D_decay.toFixed(2)},k_AU:${p.k_AU.toFixed(2)},k_A_dec:${p.k_A_decay.toFixed(2)}`;
+            return `- ${agent.name} (A=${agent.metrics.A.toFixed(3)}): P:{${paramsStr}} U:${agent.environmentalControl.U.toFixed(2)} Tags:[${agent.tags.join(',')}]`;
+        });
+
+        agentContext = `
+Discovered Agent Library (Full DNA Archive):
+The following is the complete list of discovered agents. You have access to ALL of them.
+Use this data to identify patterns or selecting specific parameter sets that yielded high Agency in the past.
+${agentLines.join('\n')}
+`;
+    }
 
     const prompt = `
 You are a "Hyper-Intelligent Researcher" overseeing an Open-Ended Evolutionary Simulation.
@@ -90,7 +116,7 @@ Current Parameter values (you can tune all of these):
 - sigma_D (Noise D, 0-0.2): ${currentParams.sigma_D.toFixed(3)}
 - sigma_A (Noise A, 0-0.2): ${currentParams.sigma_A.toFixed(3)}
 - A_alert (Threshold, 0.1-0.9): ${currentParams.A_alert.toFixed(2)}
-
+${agentContext}
 
 History (Your last actions and their impact):
 ${history.length > 0 ? history.map(h => `- Gen ${h.generation.toFixed(1)}: ${h.action} -> ${h.outcome.delta_A > 0 ? 'Improved A' : 'Decreased A'} by ${h.outcome.delta_A.toFixed(4)}`).join('\n') : "(No history yet)"}
@@ -102,6 +128,7 @@ Rules:
 4. If Agency (A) is rising, you might increase U to challenge it, or fine-tune k_AC/k_AU to reward complexity more.
 5. Use 'parameter_updates' to experiment with SDE physics. E.g., slightly lower k_A_decay can help sustain Agency. Higher k_AU makes Difficulty imply more Agency.
 6. Think Multi-Step: Don't just react to the immediate generation. Try to set up a trajectory (e.g. "Growth Phase" -> "Challenge Phase").
+7. **Consult Discovered Agent DNA**: Review the list of high-agency agents above. If their parameters are different from yours, consider adopting their successful configurations (e.g. their k_AC or k_DU values) to replicate their success.
 
 Return a JSON object with:
 - "thought_process": A brief 1-sentence reasoning, citing history if relevant.

@@ -3,6 +3,7 @@ import { SimulationParameters, ControlSignal, SimulationState } from './types';
 
 // WGSL Compute Shader
 const SDE_SHADER = `
+struct Params {
     k_CD: f32,
     k_U: f32,
     k_DU: f32,
@@ -65,7 +66,9 @@ fn sigmoid(x: f32) -> f32 {
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let index = global_id.x;
-    if (index >= arrayLength(&oldState)) {
+    
+    // DEBUG: Replaced arrayLength check with hardcoded limit to rule out intrinsic failure
+    if (index >= 65536u) {
         return;
     }
 
@@ -100,6 +103,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // Write back
     newState[index] = AgentState(nextC, nextD, nextA, nextAlertRate);
+    
+    // DEBUG PROBE: Force D to 0.777 to verify execution
+    newState[index].D = 0.777; 
 }
 `;
 
@@ -129,74 +135,89 @@ export class WebGpuEngine {
             return false;
         }
 
-        const adapter = await navigator.gpu.requestAdapter({
-            powerPreference: 'high-performance' // Target the RTX 5080
-        });
+        try {
+            const adapter = await navigator.gpu.requestAdapter({
+                powerPreference: 'high-performance' // Target the RTX 5080
+            });
 
-        if (!adapter) {
-            console.error("No WebGPU adapter found.");
+            if (!adapter) {
+                console.error("No WebGPU adapter found.");
+                return false;
+            }
+
+            console.log(`[WebGPU] Adapter found: ${adapter.info.vendor} ${adapter.info.architecture}`);
+
+            this.device = await adapter.requestDevice();
+
+            this.device.pushErrorScope('validation');
+
+            // Compile Shader
+            const shaderModule = this.device.createShaderModule({
+                code: SDE_SHADER
+            });
+
+            // Pipeline Layout
+            // We need a uniform buffer and two storage buffers (current state, next state)
+            this.pipeline = this.device.createComputePipeline({
+                layout: 'auto',
+                compute: {
+                    module: shaderModule,
+                    entryPoint: 'main'
+                }
+            });
+
+            const error = await this.device.popErrorScope();
+            if (error) {
+                console.error("[WebGPU] Shader/Pipeline Error:", error.message);
+                return false;
+            }
+
+            // Create Buffers
+            this.paramBuffer = this.device.createBuffer({
+                size: 80, // 19 floats * 4 bytes = 76, aligned to 16 bytes -> 80 is safe (needs to be multiple of 16)
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            });
+
+            // Struct size: 4 floats = 16 bytes
+            const stateBufferSize = this.numAgents * 16;
+
+            // Initial state data (all agents start at default or random)
+            const initialData = new Float32Array(this.numAgents * 4);
+            for (let i = 0; i < this.numAgents; i++) {
+                // Initialize with slight variance to see spread immediately
+                initialData[i * 4 + 0] = 0.1; // C
+                initialData[i * 4 + 1] = 0.5; // D
+                initialData[i * 4 + 2] = 0.01; // A
+                initialData[i * 4 + 3] = 0.0; // alertRate
+            }
+
+            this.stateBufferA = this.device.createBuffer({
+                size: stateBufferSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+                mappedAtCreation: true
+            });
+            new Float32Array(this.stateBufferA.getMappedRange()).set(initialData);
+            this.stateBufferA.unmap();
+
+            this.stateBufferB = this.device.createBuffer({
+                size: stateBufferSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+            });
+
+            // Result buffer for reading back to CPU
+            this.resultBuffer = this.device.createBuffer({
+                size: stateBufferSize,
+                usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
+            });
+
+            this.initialized = true;
+            this.stepCount = 0;
+            console.log("WebGPU Engine Initialized Successfully");
+            return true;
+        } catch (e) {
+            console.error("WebGPU Initialization Exception:", e);
             return false;
         }
-
-        this.device = await adapter.requestDevice();
-
-        // Compile Shader
-        const shaderModule = this.device.createShaderModule({
-            code: SDE_SHADER
-        });
-
-        // Pipeline Layout
-        // We need a uniform buffer and two storage buffers (current state, next state)
-        this.pipeline = this.device.createComputePipeline({
-            layout: 'auto',
-            compute: {
-                module: shaderModule,
-                entryPoint: 'main'
-            }
-        });
-
-        // Create Buffers
-        this.paramBuffer = this.device.createBuffer({
-            size: 80, // 19 floats * 4 bytes = 76, aligned to 16 bytes -> 80 is safe (needs to be multiple of 16)
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-        });
-
-        // Struct size: 4 floats = 16 bytes
-        const stateBufferSize = this.numAgents * 16;
-
-        // Initial state data (all agents start at default or random)
-        const initialData = new Float32Array(this.numAgents * 4);
-        for (let i = 0; i < this.numAgents; i++) {
-            // Initialize with slight variance to see spread immediately
-            initialData[i * 4 + 0] = 0.1; // C
-            initialData[i * 4 + 1] = 0.5; // D
-            initialData[i * 4 + 2] = 0.01; // A
-            initialData[i * 4 + 3] = 0.0; // alertRate
-        }
-
-        this.stateBufferA = this.device.createBuffer({
-            size: stateBufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
-            mappedAtCreation: true
-        });
-        new Float32Array(this.stateBufferA.getMappedRange()).set(initialData);
-        this.stateBufferA.unmap();
-
-        this.stateBufferB = this.device.createBuffer({
-            size: stateBufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-        });
-
-        // Result buffer for reading back to CPU
-        this.resultBuffer = this.device.createBuffer({
-            size: stateBufferSize,
-            usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
-        });
-
-        this.initialized = true;
-        this.stepCount = 0;
-        console.log("WebGPU Engine Initialized with RTX 5080 capability (hopefully)");
-        return true;
     }
 
     async step(
@@ -207,6 +228,8 @@ export class WebGpuEngine {
         if (!this.device || !this.pipeline || !this.paramBuffer || !this.stateBufferA || !this.stateBufferB || !this.resultBuffer) {
             throw new Error("WebGPU not initialized");
         }
+
+        this.device.pushErrorScope('validation');
 
         // 1. Update Uniforms
         // Struct alignment in WGSL is strict. Floats are 4 bytes.
@@ -256,10 +279,20 @@ export class WebGpuEngine {
 
         this.device.queue.submit([commandEncoder.finish()]);
 
+        const validationError = await this.device.popErrorScope();
+        if (validationError) {
+            console.error("[WebGPU] Step Validation Error:", validationError.message);
+        }
+
         // 5. Read back
         await this.resultBuffer.mapAsync(GPUMapMode.READ);
         const arrayBuffer = this.resultBuffer.getMappedRange();
         const data = new Float32Array(arrayBuffer);
+
+        // DEBUG: Logging to verify data integrity
+        if (this.stepCount % 100 === 0) {
+            console.log(`[WebGPU] Step ${this.stepCount} Readback - Agent 0 D: ${data[1]}`);
+        }
 
         // 6. Aggregate results (compute mean)
         let sumC = 0, sumD = 0, sumA = 0, sumAlert = 0;
