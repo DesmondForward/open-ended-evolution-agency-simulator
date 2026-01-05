@@ -1,0 +1,205 @@
+{
+  "id": "8062f9ad-53bc-4e43-8153-bdaf8a0f5664",
+  "timestamp": "2026-01-04T16:24:31.018Z",
+  "generation": 3109.3999999982675,
+  "metrics": {
+    "A": 0.9925589062954517,
+    "C": 0.8790362021001937,
+    "D": 0.9640525220279655,
+    "alertRate": 608.0318605679289
+  },
+  "parameters": {
+    "k_CD": 0.5,
+    "k_AC": 0.5,
+    "k_DU": 0.0005,
+    "k_U": 0.34,
+    "sigma_C": 0.005,
+    "sigma_D": 0.02,
+    "sigma_A": 0.005,
+    "tau": 5,
+    "eps": 0.05,
+    "A_alert": 0.75,
+    "dt": 0.1,
+    "useGPU": false,
+    "k_C_decay": 0.07,
+    "k_D_growth": 0.5,
+    "k_D_decay": 0.012,
+    "k_AU": 0.995,
+    "k_A_decay": 0.001
+  },
+  "environmentalControl": {
+    "U": 0.1
+  },
+  "historySnippet": [
+    {
+      "generation": 2717.7999999986237,
+      "action": "Updated Params: k_A_decay, k_D_decay",
+      "u": 0.1,
+      "params": {
+        "k_A_decay": 0.005,
+        "k_D_decay": 0.03
+      },
+      "reasoning": "A is already safely >0.75 but dA/dt is negative; since the best record held U=0.10 with lower k_A_decay (0.005) and our recent k_A_decay/k_D_decay tweaks caused instability (notably the big A drop at Gen 2614.2), revert toward the best by lowering k_A_decay and k_D_decay while keeping U steady to restore positive/near-zero dA/dt without sacrificing C and D.",
+      "outcome": {
+        "A_before": 0.9864480363664019,
+        "A_after": 0.9926106185462068,
+        "delta_A": 0.006162582179804921
+      }
+    },
+    {
+      "generation": 2766.2999999985796,
+      "action": "Updated Params: k_A_decay, k_C_decay, k_DU, k_AU, k_AC, k_CD",
+      "u": 0.1,
+      "params": {
+        "k_A_decay": 0.001,
+        "k_C_decay": 0.1,
+        "k_DU": 0.001,
+        "k_AU": 0.99,
+        "k_AC": 0.5,
+        "k_CD": 0.5
+      },
+      "reasoning": "Agency is already safely above target but is fading (dA/dt=-0.0013) while C is slightly decaying, so I’ll keep U near the proven best (0.10) and counter drift by reducing agency/complexity decay (history shows lowering k_A_decay helped at 2545.7) without adding diversity pressure.",
+      "outcome": {
+        "A_before": 0.9926106185462068,
+        "A_after": 0.9931986891556457,
+        "delta_A": 0.0005880706094388843
+      }
+    },
+    {
+      "generation": 2806.1999999985433,
+      "action": "Updated Params: k_DU, k_A_decay, k_AU, k_U",
+      "u": 0.18,
+      "params": {
+        "k_DU": 0.001,
+        "k_A_decay": 0.001,
+        "k_AU": 0.995,
+        "k_U": 0.38
+      },
+      "reasoning": "Agency is already far above the 0.75 threshold and still rising (dA/dt>0) with U matching the best record, so take a calculated “challenge” step by increasing U while keeping diversity pressure low (k_DU) to avoid the kind of large A drop seen around Gen 2614.2 when decay/pressure changes destabilized the system.",
+      "outcome": {
+        "A_before": 0.9931986891556457,
+        "A_after": 0.9938717557388606,
+        "delta_A": 0.0006730665832148652
+      }
+    },
+    {
+      "generation": 2840.2999999985122,
+      "action": "Updated Params: k_D_growth, k_D_decay, k_DU, k_U, k_A_decay",
+      "u": 0.1,
+      "params": {
+        "k_D_growth": 0.5,
+        "k_D_decay": 0.02,
+        "k_DU": 0.0005,
+        "k_U": 0.35,
+        "k_A_decay": 0.001
+      },
+      "reasoning": "A is already above target and still rising, but D is collapsing (dD/dt=-0.0086), so we take a controlled “rebuild diversity” phase by lowering U toward the best-record regime while keeping k_DU low and slightly boosting intrinsic D growth/weakening D^2 decay to arrest the slide without sacrificing high A (noting past large A drop when k_A_decay/k_D_decay shifts were too aggressive around Gen 2614).",
+      "outcome": {
+        "A_before": 0.9938717557388606,
+        "A_after": 0.9946693184320163,
+        "delta_A": 0.0007975626931557844
+      }
+    },
+    {
+      "generation": 2876.999999998479,
+      "action": "Updated Params: k_C_decay, k_U",
+      "u": 0.14,
+      "params": {
+        "k_C_decay": 0.095,
+        "k_U": 0.38
+      },
+      "reasoning": "A is already >0.75 and still rising, while C is slightly decaying, so I’ll keep U near the best-record 0.10 but add a mild challenge bump and slightly reduce complexity decay to stabilize C without harming D (given past large A drops when over-tuning k_A_decay/k_D_decay).",
+      "outcome": {
+        "A_before": 0.9946693184320163,
+        "A_after": 0.9970394229175795,
+        "delta_A": 0.0023701044855631848
+      }
+    },
+    {
+      "generation": 2916.399999998443,
+      "action": "Updated Params: k_U",
+      "u": 0.11,
+      "params": {
+        "k_U": 0.36
+      },
+      "reasoning": "Agency is already far above the 0.75 objective and still increasing; since the best record occurred at U=0.10 and our current U is higher (0.14), I’ll nudge U back toward the best while keeping the current low k_A_decay that historically produced gains (post-2690) to stabilize A near its ceiling without risking the kind of drop seen at Gen 2614.2.",
+      "outcome": {
+        "A_before": 0.9970394229175795,
+        "A_after": 0.9968132907013363,
+        "delta_A": -0.00022613221624323554
+      }
+    },
+    {
+      "generation": 2956.2999999984067,
+      "action": "Updated Params: k_C_decay",
+      "u": 0.1,
+      "params": {
+        "k_C_decay": 0.09
+      },
+      "reasoning": "Agency is already safely above the 0.75 objective and still rising, while C is slightly decaying; since best A occurred near U≈0.10 and recent tweaks mostly helped except one large drop at Gen 2614.2, I’ll nudge U back toward the best point and slightly reduce complexity decay to stabilize C without harming D.",
+      "outcome": {
+        "A_before": 0.9968132907013363,
+        "A_after": 0.9871336686698432,
+        "delta_A": -0.009679622031493085
+      }
+    },
+    {
+      "generation": 2996.69999999837,
+      "action": "Updated Params: k_C_decay",
+      "u": 0.1,
+      "params": {
+        "k_C_decay": 0.08
+      },
+      "reasoning": "Agency is already well above the 0.75 objective and still rising (dA/dt=0.0056) while complexity is slightly decaying, so I’ll keep U at the proven best level (0.10) and lightly reduce k_C_decay to arrest C’s drift without destabilizing A (history shows big A drops can happen with aggressive decay tweaks).",
+      "outcome": {
+        "A_before": 0.9871336686698432,
+        "A_after": 0.9900563313038948,
+        "delta_A": 0.0029226626340516093
+      }
+    },
+    {
+      "generation": 3036.8999999983334,
+      "action": "Updated Params: k_D_decay, k_C_decay, k_U",
+      "u": 0.09,
+      "params": {
+        "k_D_decay": 0.012,
+        "k_C_decay": 0.07,
+        "k_U": 0.34
+      },
+      "reasoning": "A is already safely >0.75 and rising, but C and especially D are decaying, so I’ll keep U near the best-record value while reducing diversity/complexity decay pressures (notably k_D_decay and k_C_decay) and slightly easing stimulation to stabilize D without sacrificing A (consistent with prior gains from lowering decay terms).",
+      "outcome": {
+        "A_before": 0.9900563313038948,
+        "A_after": 0.9947200966824886,
+        "delta_A": 0.004663765378593809
+      }
+    },
+    {
+      "generation": 3067.199999998306,
+      "action": "Set U=0.10",
+      "u": 0.1,
+      "reasoning": "Agency is already safely above 0.75 and still rising; since the best record occurred at U=0.10 and our current U=0.09 is slightly lower (and recent U changes sometimes hurt, e.g., Gen 2916.4), I’ll nudge U toward the best while holding params steady to avoid destabilizing a high-A regime.",
+      "outcome": {
+        "A_before": 0.9947200966824886,
+        "A_after": 0.9996756030038848,
+        "delta_A": 0.004955506321396186
+      }
+    }
+  ],
+  "validationMetrics": {
+    "stateBoundsViolationRate": 0,
+    "diversityFloorViolationFraction": 0,
+    "controlBoundsViolationRate": 0
+  },
+  "runContext": {
+    "bestAgencySoFar": 1
+  },
+  "name": "Tenax-Agency Coupler",
+  "description": "This agent emerged by tightly coupling Agency to both Complexity and Diversity (k_AC=0.5, k_CD=0.5) while keeping Agency decay extremely low (k_A_decay=0.001), allowing gains to accumulate and persist across generations. Its rise tracks repeated tuning of the Agency–environment pathway (k_AU=0.995) and careful damping of Diversity loss (k_D_decay=0.012), yielding high Diversity (0.964) and strong Complexity (0.879) at the moment it crossed A>0.99. It showed mild fragility to the late difficulty shift (U set to 0.10 caused a dip), but the overall parameter set remained resilient enough to sustain near-maximal agency under low-to-moderate challenge.",
+  "tags": [
+    "Coupled-Dynamics",
+    "Low-Decay",
+    "High-Diversity",
+    "Near-Threshold",
+    "Difficulty-Sensitive"
+  ]
+}
