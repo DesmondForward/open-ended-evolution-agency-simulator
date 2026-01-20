@@ -3,7 +3,37 @@ import { useSimulationStore } from '../store/simulationStore';
 import { AlertTriangle, Info } from 'lucide-react';
 
 const ControlPanel: React.FC = () => {
-    const { control, setControl, currentState, bestAgency, bestParameters, loadBestParameters } = useSimulationStore();
+    const { control, setControl, currentState, bestAgency, bestParameters, loadBestParameters, exportState, importState } = useSimulationStore();
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleExport = () => {
+        const json = exportState();
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `simulation_snapshot_${currentState.generation.toFixed(0)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target?.result as string;
+            if (content) {
+                const success = importState(content);
+                if (!success) {
+                    alert('Failed to load snapshot: Invalid format or scenario mismatch.');
+                }
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // Reset
+    };
 
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setControl(parseFloat(e.target.value));
@@ -108,40 +138,74 @@ const ControlPanel: React.FC = () => {
             )}
 
             {/* Open Logs Button */}
-            <button
-                onClick={() => {
-                    const win = window as any;
-                    if (win.api && win.api.openLogsFolder) {
-                        win.api.openLogsFolder();
-                    }
-                }}
-                style={{
-                    width: '100%',
-                    padding: '8px',
-                    background: 'transparent',
-                    border: '1px dashed var(--color-border)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: 'var(--color-text-secondary)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '0.8rem',
-                    marginTop: '12px',
-                    transition: 'all 0.2s'
-                }}
-                onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                    e.currentTarget.style.borderColor = 'var(--color-text-secondary)';
-                }}
-                onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.borderColor = 'var(--color-border)';
-                }}
-            >
-                <span>📂 Open AI Logs Folder</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <button
+                    onClick={() => {
+                        const win = window as any;
+                        if (win.api && win.api.openLogsFolder) {
+                            win.api.openLogsFolder();
+                        }
+                    }}
+                    style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: 'transparent',
+                        border: '1px dashed var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        transition: 'all 0.2s',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center'
+                    }}
+                    title="Open Logs Folder"
+                >
+                    📂 Logs
+                </button>
+                <button
+                    onClick={handleExport}
+                    style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: 'transparent',
+                        border: '1px dashed var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        transition: 'all 0.2s',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center'
+                    }}
+                    title="Save Snapshot"
+                >
+                    💾 Save
+                </button>
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: 'transparent',
+                        border: '1px dashed var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        transition: 'all 0.2s',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center'
+                    }}
+                    title="Load Snapshot"
+                >
+                    📂 Load
+                </button>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    onChange={handleImport}
+                    accept=".json"
+                />
+            </div>
         </div>
     );
 };

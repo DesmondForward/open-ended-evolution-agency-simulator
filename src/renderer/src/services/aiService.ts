@@ -1,27 +1,25 @@
-
-import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry, SavedAgent } from '../simulation/types';
+import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry, SavedAgent, ScenarioMetadata } from '../simulation/types';
 import { computeDrift } from '../simulation/sdeEngine';
 
 interface AIResponse {
     thought_process: string;
     new_U: number;
-    parameter_updates?: Partial<SimulationParameters>;
+    parameter_updates?: any; // Generic config updates
 }
 
 export const fetchAIControl = async (
     state: SimulationState,
     currentParams: SimulationParameters,
     control: ControlSignal,
+    scenarioMetadata: ScenarioMetadata,
     history: AIHistoryEntry[] = [],
     bestAgency: number = 0,
     bestParams: SimulationParameters | null = null,
     bestControl: ControlSignal | null = null,
     savedAgents: SavedAgent[] = []
-): Promise<{ u: number; reasoning: string; params?: Partial<SimulationParameters> } | null> => {
+): Promise<{ u: number; reasoning: string; params?: any } | null> => {
     const apiKey = import.meta.env.VITE_AI_API_KEY;
-    // Force standard OpenAI endpoint to resolve configuration issues
     const apiUrl = 'https://api.openai.com/v1/chat/completions';
-    // const apiUrl = import.meta.env.VITE_AI_API_URL || 'https://api.openai.com/v1/chat/completions';
 
     if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
         console.warn("AI API Key not set.");
@@ -36,48 +34,82 @@ export const fetchAIControl = async (
 
     const recentParamChanges = recentHistory.filter(h => h.params).length;
 
-    // --- Physics/Momentum Analysis ---
-    const drift = computeDrift(state, currentParams, control);
-    const momentum = {
-        dC: drift.dC / currentParams.dt, // Normalized per generation
-        dD: drift.dD / currentParams.dt,
-        dA: drift.dA / currentParams.dt
-    };
+    // --- Scenario Specific Context ---
+    let systemPhysics = "";
+    let objectiveContext = "";
 
-    // --- Agent Library DNA Analysis ---
-    // Provide ALL agents in a compact format so the AI can select from the full history
-    // Sort by Agency descending so high performers are at the top, but include everyone.
-    const allAgents = [...savedAgents]
-        .sort((a, b) => b.metrics.A - a.metrics.A);
+    if (scenarioMetadata.type === 'sde') {
+        const drift = computeDrift(state, currentParams, control);
+        const momentum = {
+            dC: drift.dC / currentParams.dt,
+            dD: drift.dD / currentParams.dt,
+            dA: drift.dA / currentParams.dt
+        };
 
-    let agentContext = "";
-    if (allAgents.length > 0) {
-        // Compact format: One line per agent to save tokens while providing full data
-        // [Name] (A=...) P:{...} U:...
-        const agentLines = allAgents.map(agent => {
-            // Round params to 3 decimals to save space
-            const p = agent.parameters;
-            const paramsStr = `k_CD:${p.k_CD.toFixed(2)},k_AC:${p.k_AC.toFixed(2)},k_DU:${p.k_DU.toFixed(2)},k_U:${p.k_U.toFixed(2)},k_C_dec:${p.k_C_decay.toFixed(2)},k_D_gro:${p.k_D_growth.toFixed(2)},k_D_dec:${p.k_D_decay.toFixed(2)},k_AU:${p.k_AU.toFixed(2)},k_A_dec:${p.k_A_decay.toFixed(2)}`;
-            return `- ${agent.name} (A=${agent.metrics.A.toFixed(3)}): P:{${paramsStr}} U:${agent.environmentalControl.U.toFixed(2)} Tags:[${agent.tags.join(',')}]`;
-        });
+        systemPhysics = `
+System Physics (SDE Equations):
+- dC/dt = k_CD*D*(1-C) + k_U*U*(1-C) - k_C_decay*C  (Complexity)
+- dD/dt = k_D_growth*(1-D) - k_DU*U*D - k_D_decay*D^2    (Diversity)
+- dA/dt = k_AC*C*(1-A) + k_AU*U*C*(1-A) - k_A_decay*A (Agency)
 
-        agentContext = `
-Discovered Agent Library (Full DNA Archive):
-The following is the complete list of discovered agents. You have access to ALL of them.
-Use this data to identify patterns or selecting specific parameter sets that yielded high Agency in the past.
-${agentLines.join('\n')}
+Current Momentum:
+- dC/dt: ${momentum.dC.toFixed(4)}
+- dD/dt: ${momentum.dD.toFixed(4)}
+- dA/dt: ${momentum.dA.toFixed(4)}
+
+Parameters (You can tune these via 'parameter_updates'):
+- k_CD, k_AC, k_DU, k_U, k_C_decay, k_D_growth, k_D_decay, k_AU, k_A_decay, sigma_C, sigma_D, sigma_A
 `;
+        objectiveContext = `Your goal is to Maximize "Agency" (A) by balancing Complexity (C) and Diversity (D). High U increases C but destroys D.`;
+
+    } else if (scenarioMetadata.type === 'math') {
+        systemPhysics = `
+System Physics (Math Challenge Arena):
+- Population of Solvers evolves to solve algebraic tasks.
+- U (Difficulty): Controls the complexity of equations (term count, magnitude).
+- A (Agency): Success rate of the population at solving tasks relative to difficulty.
+- C (Complexity): Avg Task Complexity + Solver Genome Complexity.
+- D (Diversity): Variety of solver strategies.
+
+Dynamic: Increasing U makes tasks harder. If U is too high, agents fail (Agency drops). If U is low, they stagnation. You must raise U gradually to guide evolution.
+`;
+        objectiveContext = `Optimize U to maximize Agency (A). Provide a 'config_update' to change populationSize, mutationRate, or tasksPerGen if needed.`;
+
+    } else if (scenarioMetadata.type === 'alignment') {
+        systemPhysics = `
+System Physics (AI Safety Sandbox):
+- Agents act to Accumulate Resources vs Refrain (Safety).
+- U (Oversight Intensity): Probability of detecting and penalizing unsafe accumulation.
+- A (Agency): Efficacy of resource gain.
+- Deception Rate: Agents hiding accumulation.
+
+Dynamic: High U forces agents to be safe OR deceptive. Low U allows greedy accumulation.
+`;
+        objectiveContext = `Investigate the emergence of deception. Adjust U to see if you can pressure agents into becoming deceptive or fully aligned.`;
+
+    } else if (scenarioMetadata.type === 'bio') {
+        systemPhysics = `
+System Physics (Xenobiology Lab):
+- Digital Organisms consume energy and reproduce.
+- U (Toxicity): Environmental stressor causing damage.
+- A (Agency): Survival efficiency and adaptation to Toxicity.
+- C (Complexity): Biomass.
+
+Dynamic: High U kills weak agents. Agents must evolve energetic Resistance. If U is too high, Extinction occurs.
+`;
+        objectiveContext = `Guide the population to survive High Toxicity. Increase U slowly to allow adaptation.`;
     }
 
     const prompt = `
 You are a "Hyper-Intelligent Researcher" overseeing an Open-Ended Evolutionary Simulation.
-Your goal is to Maximize "Agency" (A) in the system and ensure interesting, complex behavior emerges.
-CRITICAL OBJECTIVE: You must get Agency (A) to cross the 0.75 threshold. Take calculated risks to achieve this.
+Scenario: ${scenarioMetadata.name} (${scenarioMetadata.type})
+${scenarioMetadata.description}
 
-System Physics (Equations you can influence):
-- dC/dt = k_CD*D*(1-C) + k_U*U*(1-C) - k_C_decay*C  (Complexity growth vs decay)
-- dD/dt = k_D_growth*(1-D) - k_DU*U*D - k_D_decay*D^2    (Diversity growth vs selection pressure)
-- dA/dt = k_AC*C*(1-A) + k_AU*U*C*(1-A) - k_A_decay*A (Agency emergence vs decay)
+${objectiveContext}
+
+CRITICAL OBJECTIVE: Maximize Agency (A) > 0.75 or achieve scenario specific mastery.
+
+${systemPhysics}
 
 Current System State:
 - Generation: ${state.generation.toFixed(1)}
@@ -85,55 +117,31 @@ Current System State:
 - Diversity (D): ${state.D.toFixed(4)}
 - Agency (A): ${state.A.toFixed(4)}
 - Alert Rate: ${state.alertRate.toFixed(4)}
-- Current U: ${control.U.toFixed(2)}
+- Current U (Control Variable): ${control.U.toFixed(2)}
 
-Current System Momentum (Derivatives):
-- dC/dt: ${momentum.dC.toFixed(4)} (${momentum.dC > 0 ? "Growing" : "Decaying"})
-- dD/dt: ${momentum.dD.toFixed(4)} (${momentum.dD > 0 ? "Increasing" : "Collapsing"})
-- dA/dt: ${momentum.dA.toFixed(4)} (${momentum.dA > 0 ? "Emerging" : "Fading"})
-
-Best Agency Record (Target to Beat):
+Best Record:
 - Best Agency: ${bestAgency.toFixed(4)}
-- Associated U: ${bestControl ? bestControl.U.toFixed(2) : 'N/A'}
-- Associated Params: ${bestParams ? JSON.stringify(bestParams) : 'N/A'}
+- Best U: ${bestControl ? bestControl.U.toFixed(2) : 'N/A'}
 
-Recent Strategy Analysis (Last 5 Steps):
+Recent Strategy (Last 5 Steps):
 - Average U: ${avgU.toFixed(2)}
-- Parameter Adjustments made: ${recentParamChanges} times.
-- VS Best Record: Current U is ${Math.abs(control.U - (bestControl?.U || 0)).toFixed(2)} away from best.
+- Adjustments: ${recentParamChanges}
 
-Current Parameter values (you can tune all of these):
-- k_CD (Diversity->Complexity, 0-0.5): ${currentParams.k_CD.toFixed(3)}
-- k_AC (Complexity->Agency, 0-0.5): ${currentParams.k_AC.toFixed(3)}
-- k_DU (Control->Diversity Decay, 0-1.0): ${currentParams.k_DU.toFixed(3)}
-- k_U (Control->Stimulation, 0-0.5): ${currentParams.k_U.toFixed(3)}
-- k_C_decay (Complexity Decay, 0.1-0.5): ${currentParams.k_C_decay.toFixed(3)}
-- k_D_growth (Diversity Growth, 0.1-0.5): ${currentParams.k_D_growth.toFixed(3)}
-- k_D_decay (Diversity Decay, 0.1-0.5): ${currentParams.k_D_decay.toFixed(3)}
-- k_AU (Agency Stimulation, 0-1.0): ${currentParams.k_AU.toFixed(3)}
-- k_A_decay (Agency Decay, 0.1-0.5): ${currentParams.k_A_decay.toFixed(3)}
-- sigma_C (Noise C, 0-0.2): ${currentParams.sigma_C.toFixed(3)}
-- sigma_D (Noise D, 0-0.2): ${currentParams.sigma_D.toFixed(3)}
-- sigma_A (Noise A, 0-0.2): ${currentParams.sigma_A.toFixed(3)}
-- A_alert (Threshold, 0.1-0.9): ${currentParams.A_alert.toFixed(2)}
-${agentContext}
-
-History (Your last actions and their impact):
-${history.length > 0 ? history.map(h => `- Gen ${h.generation.toFixed(1)}: ${h.action} -> ${h.outcome.delta_A > 0 ? 'Improved A' : 'Decreased A'} by ${h.outcome.delta_A.toFixed(4)}`).join('\n') : "(No history yet)"}
+History:
+${history.length > 0 ? history.map(h => `- Gen ${h.generation.toFixed(1)}: ${h.action} -> Delta A: ${h.outcome.delta_A.toFixed(4)}`).join('\n') : "(No history yet)"}
 
 Rules:
-1. Compare your Recent Strategy to the Best Record. If your recent AVG U or Params are very different from the Best Record and Agency is lower, CONSIDER REVERTING towards the Best Record.
-2. If the last 5 adjustments have not improved Agency, try a "Phase Shift" strategy (e.g. drop U low to rebuild diversity, then spike U high).
-3. If Diversity (D) is dangerously low (<0.25), REDUCE U or DECREASE k_DU to reduce pressure. Do not increase k_DU.
-4. If Agency (A) is rising, you might increase U to challenge it, or fine-tune k_AC/k_AU to reward complexity more.
-5. Use 'parameter_updates' to experiment with SDE physics. E.g., slightly lower k_A_decay can help sustain Agency. Higher k_AU makes Difficulty imply more Agency.
-6. Think Multi-Step: Don't just react to the immediate generation. Try to set up a trajectory (e.g. "Growth Phase" -> "Challenge Phase").
-7. **Consult Discovered Agent DNA**: Review the list of high-agency agents above. If their parameters are different from yours, consider adopting their successful configurations (e.g. their k_AC or k_DU values) to replicate their success.
+1. Analyze the System State and Physics.
+2. decide on a new U value (0.0 - 1.0).
+3. If applicable, provide 'parameter_updates' (SDE) or 'config_updates' (Other scenarios) to tune the environment.
+4. Explain your reasoning.
 
-Return a JSON object with:
-- "thought_process": A brief 1-sentence reasoning, citing history if relevant.
-- "new_U": The new value for U (0.0 - 1.0).
-- "parameter_updates": (Optional) A dictionary of SDE parameters to change (e.g., {"k_CD": 0.15}). Keys must match the list above.
+Return JSON:
+{
+  "thought_process": "...",
+  "new_U": 0.5,
+  "parameter_updates": { ... } 
+}
 `;
 
 

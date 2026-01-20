@@ -13,10 +13,13 @@ import { SimulationState, SimulationParameters, ControlSignal } from './types';
 /**
  * Box-Muller transform for generating Gaussian random numbers
  */
-function gaussianRandom(): number {
+/**
+ * Box-Muller transform for generating Gaussian random numbers
+ */
+export function gaussianRandom(rng: () => number = Math.random): number {
     let u = 0, v = 0;
-    while (u === 0) u = Math.random();
-    while (v === 0) v = Math.random();
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
     return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
@@ -76,16 +79,17 @@ export function computeDrift(
 /**
  * Compute the diffusion (noise) terms for the SDE system
  */
-function computeDiffusion(
-    params: SimulationParameters
+export function computeDiffusion(
+    params: SimulationParameters,
+    rng: () => number
 ): { noiseC: number; noiseD: number; noiseA: number } {
     const { sigma_C, sigma_D, sigma_A, dt } = params;
     const sqrtDt = Math.sqrt(dt);
 
     return {
-        noiseC: sigma_C * gaussianRandom() * sqrtDt,
-        noiseD: sigma_D * gaussianRandom() * sqrtDt,
-        noiseA: sigma_A * gaussianRandom() * sqrtDt
+        noiseC: sigma_C * gaussianRandom(rng) * sqrtDt,
+        noiseD: sigma_D * gaussianRandom(rng) * sqrtDt,
+        noiseA: sigma_A * gaussianRandom(rng) * sqrtDt
     };
 }
 
@@ -97,13 +101,14 @@ function computeDiffusion(
 export function eulerMaruyamaStep(
     state: SimulationState,
     params: SimulationParameters,
-    control: ControlSignal
+    control: ControlSignal,
+    rng: () => number = Math.random
 ): SimulationState {
     // Compute deterministic drift
     const drift = computeDrift(state, params, control);
 
     // Compute stochastic diffusion
-    const noise = computeDiffusion(params);
+    const noise = computeDiffusion(params, rng);
 
     // Update state with bounds enforcement
     const newC = clamp01(state.C + drift.dC + noise.noiseC);
@@ -127,11 +132,12 @@ export function runSimulationSteps(
     initialState: SimulationState,
     params: SimulationParameters,
     control: ControlSignal,
-    numSteps: number
+    numSteps: number,
+    rng: () => number = Math.random
 ): SimulationState {
     let state = initialState;
     for (let i = 0; i < numSteps; i++) {
-        state = eulerMaruyamaStep(state, params, control);
+        state = eulerMaruyamaStep(state, params, control, rng);
     }
     return state;
 }

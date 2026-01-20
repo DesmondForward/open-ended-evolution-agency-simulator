@@ -110,6 +110,16 @@ export interface AIHistoryEntry {
     };
 }
 
+/** Log entry for any intervention (Manual or AI) */
+export interface InterventionLogEntry {
+    id: string;
+    timestamp: number; // generation
+    realtime: Date;
+    source: 'USER' | 'AI';
+    action: string;
+    reasoning?: string;
+}
+
 /** Saved Agent Structure for Library */
 export interface SavedAgent {
     id: string;
@@ -184,3 +194,66 @@ export const DEFAULT_PARAMETERS: SimulationParameters = {
 export const DEFAULT_CONTROL: ControlSignal = {
     U: 0.2
 };
+
+/** 
+ * SCENARIO SYSTEM TYPE DEFINITIONS (v2.0) checks
+ */
+
+export interface ScenarioMetadata {
+    id: string;
+    name: string;
+    description: string;
+    version: string;
+    type: 'sde' | 'math' | 'alignment' | 'bio';
+}
+
+/**
+ * Common events emitted by any scenario
+ */
+export type ScenarioEventType =
+    | 'threshold_crossed'
+    | 'sustained_high'
+    | 'peak'
+    | 'task_solved'
+    | 'constraint_violated'
+    | 'extinction'
+    | 'intervention'
+    | 'custom';
+
+export interface ScenarioEvent {
+    type: ScenarioEventType;
+    timestamp: number; // generation or time
+    data: any;
+    message: string;
+}
+
+export interface Scenario<ConfigType = any> {
+    metadata: ScenarioMetadata;
+
+    /** Initialize the scenario with a seed and configuration */
+    initialize(seed: number, config?: ConfigType): void;
+
+    /** Advance the simulation by one step */
+    step(control: ControlSignal): void;
+
+    /** Update configuration mid-run */
+    updateConfig(config: Partial<ConfigType>): void;
+
+    /** Get the current telemetry metrics */
+    getMetrics(): TelemetryPoint;
+
+    /** Get the current internal state (for UI/visualizers) */
+    getState(): any;
+
+    /** Serialize complete state for snapshot/replay */
+    serialize(): string;
+
+    /** Restore state from snapshot */
+    deserialize(state: string): void;
+
+    /** Get recent events */
+    getEvents(): ScenarioEvent[];
+
+    /** Clear event queue */
+    clearEvents(): void;
+}
