@@ -9,6 +9,7 @@ import ParameterPanel from './ParameterPanel';
 import ValidationPanel from './ValidationPanel';
 import { AIControlPanel } from './AIControlPanel';
 import InterventionLogPanel from './InterventionLogPanel';
+import AgencyLog from './AgencyLog';
 
 const Dashboard: React.FC = () => {
     const {
@@ -61,6 +62,7 @@ const Dashboard: React.FC = () => {
                 <ControlPanel />
                 <AlertPanel />
                 <InterventionLogPanel />
+                <AgencyLog />
                 <ParameterPanel />
                 <ValidationPanel />
             </div>

@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import {
     SimulationState,
@@ -11,7 +12,8 @@ import {
     ValidationMetrics,
     AIHistoryEntry,
     ScenarioMetadata,
-    InterventionLogEntry
+    InterventionLogEntry,
+    ScenarioEvent
 } from '../simulation/types';
 import { fetchAIControl, generateAgentDescription } from '../services/aiService';
 import { SavedAgent } from '../simulation/types';
@@ -20,6 +22,7 @@ import { SDEScenario } from '../simulation/scenarios/sde/SDEScenario';
 import { MathScenario } from '../simulation/scenarios/math/MathScenario';
 import { AlignmentScenario } from '../simulation/scenarios/alignment/AlignmentScenario';
 import { BioScenario } from '../simulation/scenarios/bio/BioScenario';
+import { AgentsScenario } from '../simulation/scenarios/agents/AgentsScenario';
 
 interface SimulationStore {
     // State
@@ -29,6 +32,7 @@ interface SimulationStore {
     control: ControlSignal;
     telemetry: TelemetryPoint[];
     alerts: AlertEvent[];
+    events: ScenarioEvent[]; // Global event log
     validationMetrics: ValidationMetrics;
 
     // Scenario Management
@@ -70,18 +74,21 @@ interface SimulationStore {
 
 // Max telemetry points to keep in memory for charting
 const MAX_TELEMETRY_POINTS = 1000;
+const MAX_EVENT_LOGS = 100;
 
 // Initialize Scenarios
 const sdeScenario = new SDEScenario();
 const mathScenario = new MathScenario();
 const alignmentScenario = new AlignmentScenario();
 const bioScenario = new BioScenario();
+const agentsScenario = new AgentsScenario();
 
 const scenarios: Record<string, any> = {
     'sde-v1': sdeScenario,
     'math': mathScenario,
     'alignment': alignmentScenario,
-    'bio': bioScenario
+    'bio': bioScenario,
+    'agents': agentsScenario
 };
 
 // Initialize Runner
@@ -111,6 +118,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     control: initialBest && initialBest.control ? { ...initialBest.control } : { ...DEFAULT_CONTROL },
     telemetry: [],
     alerts: [],
+    events: [],
     validationMetrics: {
         stateBoundsViolationRate: 0,
         diversityFloorViolationFraction: 0,
@@ -119,7 +127,13 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
 
     currentScenarioId: 'sde-v1',
     scenarioMetadata: sdeScenario.metadata,
-    availableScenarios: [sdeScenario.metadata, mathScenario.metadata, alignmentScenario.metadata, bioScenario.metadata],
+    availableScenarios: [
+        sdeScenario.metadata,
+        mathScenario.metadata,
+        alignmentScenario.metadata,
+        bioScenario.metadata,
+        agentsScenario.metadata
+    ],
 
     savedAgents: [],
     isAIControlled: true,
@@ -159,6 +173,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             currentState: { ...DEFAULT_INITIAL_STATE }, // Reset UI state display
             telemetry: [],
             alerts: [],
+            events: [],
             aiReasoning: "",
             aiHistory: [],
         });
@@ -217,7 +232,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             scenarioMetadata: scenario.metadata,
             isPlaying: false,
             telemetry: [],
-            alerts: []
+            alerts: [],
+            events: []
         });
     },
 
@@ -256,20 +272,26 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         });
     },
 
-    handleEvent: (event: any) => {
-        if (event.type === 'threshold_crossed') {
-            const newAlert: AlertEvent = {
-                id: crypto.randomUUID(),
-                generation: event.timestamp,
-                agencyLevel: event.data.A,
-                timestamp: new Date(),
-                type: 'threshold_crossed'
-            };
-            set(state => ({ alerts: [...state.alerts, newAlert] }));
+    handleEvent: (event: any) => { // Type as ScenarioEvent
+        set(state => {
+            const newEvents = [...state.events, event];
+            if (newEvents.length > MAX_EVENT_LOGS) newEvents.shift(); // Keep last 100
 
-            // Trigger auto-save Logic here if needed (similar to old store)
-            // ... (omitted for brevity in this refactor step, can re-add)
-        }
+            const updates: any = { events: newEvents };
+
+            if (event.type === 'threshold_crossed') {
+                const newAlert: AlertEvent = {
+                    id: crypto.randomUUID(),
+                    generation: event.timestamp,
+                    agencyLevel: event.data.A || 0, // Fallback
+                    timestamp: new Date(),
+                    type: 'threshold_crossed'
+                };
+                updates.alerts = [...state.alerts, newAlert];
+            }
+
+            return updates;
+        });
     },
 
     triggerAI: async () => {
@@ -322,14 +344,6 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             // Apply to Runner
             runner.setControl({ U: decision.u });
             if (decision.params) {
-                // We use the internal updateParameters to ensure config is updated,
-                // BUT we don't want to double-log the AI action as a USER action.
-                // So we assume AI sets parameters directly or we call a silent update?
-                // For now, let's call updateParameters but generic. 
-                // Actually, calling get().updateParameters(decision.params) would log it as USER (source hardcoded).
-                // We should manually update params here or allow source override.
-                // Simpler: Just update state and runner.
-
                 const merged = { ...parameters, ...decision.params };
                 const currentScenario = scenarios[get().currentScenarioId];
                 if (currentScenario.updateConfig) {
@@ -431,7 +445,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 currentState: snapshot.store.currentState, // Restore UI metrics immediately
                 isPlaying: false,
                 telemetry: [], // Clear telemetry or try to restore? Telemetry is transient mostly.
-                alerts: []
+                alerts: [],
+                events: [] // Reset events on import
             });
 
             // Set runner context

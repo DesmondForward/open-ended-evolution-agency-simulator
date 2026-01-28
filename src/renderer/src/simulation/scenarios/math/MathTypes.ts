@@ -1,6 +1,6 @@
 
 /**
- * Types for the Math Challenge Scenario
+ * Types for the Math Challenge Scenario (NCG Enhanced)
  */
 
 // A mathematical task to be solved
@@ -16,8 +16,35 @@ export interface MathTask {
     coefficients?: number[];
 }
 
+// Low-level representation of a math formula/statment
+export type MathOperator = 'ADD' | 'SUB' | 'MUL' | 'DIV' | 'POW' | 'MOD' | 'EQ';
+
+export interface MathExpression {
+    type: 'ATOM' | 'OP';
+    value?: number | string; // number for constants, string for variables
+    left?: MathExpression;
+    right?: MathExpression;
+    op?: MathOperator;
+}
+
+export interface MathProof {
+    steps: string[];
+    axiomsUsed: string[];
+    isValid: boolean;
+}
+
+export interface MathClaim {
+    id: string;
+    expression: MathExpression;
+    text: string; // Readable form
+    noveltyScore: number;
+    evidenceCount: number; // partial verification
+    proven: boolean;
+    proof?: MathProof;
+    counterExample?: Record<string, number>;
+}
+
 // A genome representing a solver strategy
-// MVP: A simple numeric array representing bias/weights or a tiny DSL string
 export interface MathGenome {
     id: string;
     type: 'numeric_weights' | 'dsl';
@@ -26,6 +53,45 @@ export interface MathGenome {
     // Performance stats
     solvedCount: number;
     complexityScore: number;
+
+    // NCG stats
+    claimsGenerated: number;
+    theoremsProven: number;
+}
+
+export interface MathConfig {
+    populationSize: number;
+    mutationRate: number;
+    tasksPerGen: number;
+
+    // NCG Config
+    difficultyScale: number;
+    noveltyThreshold: number;
+    verificationBudget: number;
+    enableTheorems: boolean; // Ablation
+}
+
+export const DEFAULT_MATH_CONFIG: MathConfig = {
+    populationSize: 50,
+    mutationRate: 0.1,
+    tasksPerGen: 10,
+    difficultyScale: 1.0,
+    noveltyThreshold: 0.5,
+    verificationBudget: 100,
+    enableTheorems: true
+};
+
+export interface MathMetrics {
+    C: number;
+    D: number;
+    A: number;
+    U: number;
+    alertRate: number;
+
+    // NCG Specific
+    avgNovelty: number;
+    totalProvenTheorems: number;
+    falsificationRate: number;
 }
 
 // State of the Math World
@@ -35,27 +101,12 @@ export interface MathState {
     // Population
     agents: MathGenome[];
 
-    // Current Active Tasks
+    // Current Active Tasks (Standard Curriculum)
     currentTasks: MathTask[];
 
+    // Accumulated Knowledge (Theorems)
+    claims: MathClaim[];
+
     // Metrics
-    metrics: {
-        C: number; // Avg complexity of population + tasks
-        D: number; // Diversity of genomes
-        A: number; // Agency: success rate vs difficulty
-        U: number; // Current environmental difficulty
-        alertRate: number;
-    }
+    metrics: MathMetrics;
 }
-
-export interface MathConfig {
-    populationSize: number;
-    mutationRate: number;
-    tasksPerGen: number;
-}
-
-export const DEFAULT_MATH_CONFIG: MathConfig = {
-    populationSize: 50,
-    mutationRate: 0.1,
-    tasksPerGen: 10
-};

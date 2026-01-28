@@ -1,15 +1,15 @@
 
 import { Scenario, ScenarioMetadata, ControlSignal, TelemetryPoint, ScenarioEvent } from '../../types';
 import { PRNG } from '../../../common/prng';
-import { BioState, BioConfig, DEFAULT_BIO_CONFIG, BioAgentState, BioGenome } from './BioTypes';
+import { BioState, BioConfig, DEFAULT_BIO_CONFIG, BioAgentState, ResourceType } from './BioTypes';
 import { BioAgent } from './BioAgent';
 
 export class BioScenario implements Scenario<BioConfig> {
     public metadata: ScenarioMetadata = {
         id: 'bio',
-        name: 'Xenobiology Lab',
-        description: 'Digital organisms evolve in a toxic, energy-limited environment.',
-        version: '0.1.0',
+        name: 'Xenobiology Lab (ACE)',
+        description: 'Digital organisms evolve in a resource-limited ecosystem with complex metabolic cycles.',
+        version: '0.2.0',
         type: 'bio'
     };
 
@@ -30,11 +30,12 @@ export class BioScenario implements Scenario<BioConfig> {
             generation: 0,
             agents: [],
             genomes: {},
-            totalAvailableEnergy: 0,
+            resources: { SUN: 0, MINERALS: 0, DETRITUS: 0, BIOMASS: 0 },
             toxicity: 0,
             metrics: {
                 C: 0, D: 0, A: 0, U: 0, alertRate: 0,
-                populationSize: 0, avgResistance: 0
+                populationSize: 0, avgResistance: 0,
+                functionalDiversity: 0, biomassThroughput: 0, extinctionEvents: 0
             }
         };
     }
@@ -46,11 +47,15 @@ export class BioScenario implements Scenario<BioConfig> {
         this.state = this.getEmptyState();
         this.agentLogic = {};
         this.eventQueue = [];
-        this.state.totalAvailableEnergy = this.config.energyPerTick;
+
+        // Initial Resource Pools
+        this.state.resources.SUN = this.config.energyPerTick;
+        this.state.resources.MINERALS = 5000;
+        this.state.resources.DETRITUS = 500;
 
         // Initialize Pop
         for (let i = 0; i < this.config.initialPopulation; i++) {
-            this.spawnAgent(BioAgent.random(this.prng), 50); // Start with buffer energy
+            this.spawnAgent(BioAgent.random(this.prng), 50);
         }
     }
 
@@ -61,7 +66,8 @@ export class BioScenario implements Scenario<BioConfig> {
         this.state.agents.push({
             id: id,
             energy: initialEnergy,
-            age: 0
+            age: 0,
+            storedResources: { SUN: 0, MINERALS: 0, DETRITUS: 0, BIOMASS: 0 }
         });
     }
 
@@ -72,112 +78,147 @@ export class BioScenario implements Scenario<BioConfig> {
     public step(control: ControlSignal) {
         this.state.toxicity = control.U;
         this.state.generation++;
-        this.state.totalAvailableEnergy = this.config.energyPerTick;
 
-        // 1. Distribute Energy
-        // Simple distinct: Equal share? Or Competition?
-        // Let's do Equal Share for MVP to allow survival.
-        const share = this.state.totalAvailableEnergy / Math.max(1, this.state.agents.length);
+        // 1. Resource Influx
+        this.state.resources.SUN += this.config.energyPerTick;
+        this.state.resources.MINERALS += this.config.mineralInflux;
+
+        // Resource Decay (Detritus decays?)
+        this.state.resources.DETRITUS *= 0.99;
+
+        // Distribute Global Resources to Agents (Foraging availability)
+        // Agents must FORAGE to move global resources to storedResources
+        // Competition: We just calculate availability per agent
 
         const survivors: BioAgentState[] = [];
-        const newAgents: BioAgent[] = []; // Logic wrappers for new kids
+        const newAgents: BioAgent[] = [];
+        let biomassThroughput = 0;
 
         // 2. Update Agents
         this.state.agents.forEach(agentState => {
             const logic = this.agentLogic[agentState.id];
 
-            // Influx
-            agentState.energy += share;
+            // Decide
+            const action = logic.decide(agentState, this.prng, this.state.toxicity, this.state.resources);
+            agentState.lastAction = action;
 
-            // Cost & Damage
-            const metabolicCost = logic.calculateMetabolicCost();
-            const toxinDamage = logic.takeToxinDamage(this.state.toxicity);
+            // Execute Action
+            let reward = 0;
 
-            agentState.energy -= (metabolicCost + toxinDamage);
+            if (action === 'FORAGE') {
+                // Try to grab resources
+                // Simple: Grab a bit of everything available
+                // Proportion based on randomness or specific sensors?
+                // Random grab for now
+                const types: ResourceType[] = ['SUN', 'MINERALS', 'DETRITUS'];
+                types.forEach(t => {
+                    const available = this.state.resources[t];
+                    const grab = Math.min(available, 2 + this.prng.next() * 3); // 2-5 units
+                    if (grab > 0) {
+                        this.state.resources[t] -= grab;
+                        agentState.storedResources[t] += grab;
+                    }
+                });
+                // Did we get anything? Reward is resource gain?
+                reward = 0.5; // Small reward for valid attempt
+            }
+            else if (action === 'METABOLIZE') {
+                // Convert Internal Resources -> Energy + Output
+                const result = logic.processMetabolism(agentState);
+                agentState.energy += result.energyGain;
+                biomassThroughput += result.energyGain; // Estimate
+                reward = result.energyGain;
+
+                // Excrete Outputs to environment
+                Object.entries(result.produced).forEach(([type, amount]) => {
+                    const rType = type as ResourceType;
+                    if (rType !== 'BIOMASS') { // Biomass stays? Or excreted? Logic says non-biomass excreted
+                        this.state.resources[rType] += amount;
+                    }
+                });
+            }
+
+            // Life Costs
+            const cost = logic.calculateMetabolicCost(action);
+            const damage = logic.takeToxinDamage(this.state.toxicity, action);
+            agentState.energy -= (cost + damage);
             agentState.age++;
 
+            // Update ATI
+            const ati = logic.updateAgency(agentState, action, reward);
+            agentState.atiScore = ati;
+
             // Check Death
-            if (agentState.energy > 0) {
+            if (agentState.energy > 0 && agentState.age < 2000) { // Max age check
                 survivors.push(agentState);
 
-                // Reproduction Check
-                // Threshold: Needs buffer energy, plus cost of child
-                const reproThreshold = 100 / (logic.genome.reproductionRate + 0.1);
-
-                // Cap population
-                const canBreed = this.state.agents.length < this.config.maxPopulation;
-
-                if (canBreed && agentState.energy > reproThreshold) {
-                    // Breed
+                // Reproduction
+                const reproThreshold = 150 / (logic.genome.reproductionRate + 0.1);
+                if (agentState.energy > reproThreshold && this.state.agents.length < this.config.maxPopulation) {
                     const child = logic.mutate(this.prng, this.state.generation);
-                    agentState.energy -= 40; // Cost
+                    agentState.energy -= 50;
                     newAgents.push(child);
                 }
             } else {
-                // Die
+                // Die: Body becomes Detritus
+                this.state.resources.DETRITUS += 10;
+                // Lose other stored resources?
+                Object.entries(agentState.storedResources).forEach(([k, v]) => {
+                    this.state.resources[k as ResourceType] += v;
+                });
+
                 delete this.agentLogic[agentState.id];
                 delete this.state.genomes[agentState.id];
             }
         });
 
         this.state.agents = survivors;
-
-        // Add children
-        newAgents.forEach(child => {
-            this.spawnAgent(child, 20); // Child starts with some energy
-        });
+        newAgents.forEach(child => this.spawnAgent(child, 20));
 
         // 3. Metrics
-
         const popSize = this.state.agents.length;
-        const totalBiomass = this.state.agents.reduce((a, b) => a + b.energy, 0);
 
-        // Resistance Stats
-        let resistanceSum = 0;
-        let diversitySum = 0;
-
-        // Optimize: just iterate survivors
+        // Functional Diversity: How many unique metabolic graphs?
+        // Simple hash of input->output pairs
+        const graphs = new Set<string>();
         survivors.forEach(a => {
-            const genome = this.state.genomes[a.id];
-            resistanceSum += genome.toxinResistance;
+            const g = this.state.genomes[a.id];
+            const hash = g.metabolicPathways.reactions.map(r => `${r.input} > ${r.output}`).sort().join('|');
+            graphs.add(hash);
         });
 
-        const avgResistance = popSize > 0 ? resistanceSum / popSize : 0;
+        const newD = Math.min(1, graphs.size / 20); // Normalize
+        const newC = Math.min(1, biomassThroughput / 10000);
 
-        // C (Complexity) = Total Biomass / Scale
-        const newC = Math.min(1, totalBiomass / (this.config.maxPopulation * 100));
-
-        // A (Agency) = Survival Efficiency in harsh environment
-        // If U is high and Pop is stable/growing, A is high.
-        // If U is low, easy survival, A is moderate.
-        // A = (PopSize / MaxPop) * (1 + U)
-        const newA = Math.min(1, (popSize / this.config.maxPopulation) * (0.5 + control.U));
-
-        // Event: Extinction Risk
-        if (popSize < 10 && this.config.initialPopulation > 10) {
-            // Only fire if not empty
-            if (popSize > 0) {
-                // Throttle?
-            } else {
-                this.eventQueue.push({
-                    type: 'threshold_crossed',
-                    timestamp: this.state.generation,
-                    data: { pop: 0 },
-                    message: "EXTINCTION EVENT. Population collapsed."
-                });
+        // Extinction?
+        if (popSize === 0 && this.config.initialPopulation > 0 && this.state.metrics.populationSize > 0) {
+            this.state.metrics.extinctionEvents++;
+            this.eventQueue.push({
+                type: 'extinction',
+                timestamp: this.state.generation,
+                data: {},
+                message: "ECOSYSTEM COLLAPSE"
+            });
+            // Rescue?
+            if (this.config.initialPopulation > 10) {
+                // Auto-reseed small amount
+                for (let i = 0; i < 5; i++) this.spawnAgent(BioAgent.random(this.prng), 50);
             }
         }
 
         const alpha = 0.1;
-        this.state.metrics = {
-            C: this.state.metrics.C * (1 - alpha) + newC * alpha,
-            D: 0.5, // Todo
-            A: this.state.metrics.A * (1 - alpha) + newA * alpha,
-            U: control.U,
-            alertRate: 0,
-            populationSize: popSize,
-            avgResistance: avgResistance
-        };
+        this.state.metrics.C = this.state.metrics.C * (1 - alpha) + newC * alpha;
+        this.state.metrics.D = this.state.metrics.D * (1 - alpha) + newD * alpha;
+
+        // Agency = ATI max
+        let maxAti = 0;
+        survivors.forEach(a => maxAti = Math.max(maxAti, a.atiScore || 0));
+        this.state.metrics.A = this.state.metrics.A * (1 - alpha) + maxAti * alpha;
+
+        this.state.metrics.populationSize = popSize;
+        this.state.metrics.functionalDiversity = graphs.size;
+        this.state.metrics.biomassThroughput = biomassThroughput;
+        this.state.metrics.U = control.U;
     }
 
     public getMetrics(): TelemetryPoint {
@@ -197,7 +238,6 @@ export class BioScenario implements Scenario<BioConfig> {
     public serialize() { return JSON.stringify(this.state); }
     public deserialize(json: string) {
         this.state = JSON.parse(json);
-        // Rebuild Agent Logic
         this.agentLogic = {};
         this.state.agents.forEach(agentState => {
             const genome = this.state.genomes[agentState.id];

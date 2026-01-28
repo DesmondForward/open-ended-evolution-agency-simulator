@@ -58,7 +58,9 @@ const ControlPanel: React.FC = () => {
         <div className="card" style={{ padding: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Intervention: Environment Difficulty (U)</h3>
-                <Info size={16} color="var(--color-text-secondary)" style={{ cursor: 'help' }} title="Control external selection pressure to drive evolution" />
+                <div title="Control external selection pressure to drive evolution">
+                    <Info size={16} color="var(--color-text-secondary)" style={{ cursor: 'help' }} />
+                </div>
             </div>
 
             <div style={{ marginBottom: '20px' }}>

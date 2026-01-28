@@ -1,62 +1,63 @@
-# Open-Ended Virtual Evolution Simulator // Agency Detector
+# Open-Ended Evolution Agency Simulator v2.0
 
-A specialized research tool for simulating and detecting emergent agency in open-ended evolutionary systems. This application implements a Stochastic Differential Equation (SDE) engine to model the dynamics of Complexity, Diversity, and Agency within a theoretical ecosystem.
+A specialized research tool for simulating and detecting emergent agency in open-ended evolutionary systems. This application implements a multi-scenario engine to model the dynamics of Complexity, Diversity, and Agency, featuring advanced metrics like the **Agency Threshold Index (ATI)**.
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg) ![Viz](https://img.shields.io/badge/viz-Recharts%20%7C%20Lucide%20%7C%20KaTeX-orange.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg) ![Viz](https://img.shields.io/badge/viz-Three.js%20%7C%20Recharts%20%7C%20KaTeX-orange.svg)
 
 ## 🔬 Scientific Background
 
-This simulator operates on the hypothesis that **Agency** ($A$) emerges as a product of **Complexity** ($C$) and **Diversity** ($D$) under the pressure of **Environmental Difficulty** ($U$).
+This simulator explores the hypothesis that **Agency** ($A$) emerges as a product of **Complexity** ($C$) and **Diversity** ($D$) under the pressure of **Environmental Difficulty** ($U$). v2.0 expands this into five distinct scenarios and introduces rigorous measurement via ATI.
 
-The core simulation engine utilizes **Euler-Maruyama integration** to solve the following system of Stochastic Differential Equations:
+### Core Scenarios
 
-1.  **Complexity Dynamics** ($dC$):
-    $$dC = (k_{CD} \cdot D \cdot (1-C) + k_U \cdot U \cdot (1-C) - k_{C\_decay} \cdot C)dt + \sigma_C dW_C$$
-    *Models complexity growth via diversity-driven innovation and environmental challenge.*
+1.  **SDE Macro-Dynamics (v1)**
+    *   **Model**: Stochastic Differential Equations (Euler-Maruyama integration).
+    *   **Dynamics**:
+        *   $dC = (k_{CD} \cdot D \cdot (1-C) + k_U \cdot U \cdot (1-C) - k_{C\_decay} \cdot C)dt + \sigma_C dW_C$
+        *   $dD = (k_{D\_growth}(1-D) - k_{DU} \cdot U \cdot D - k_{D\_decay}D^2)dt + \sigma_D dW_D$
+        *   $dA = (k_{AC} \cdot C \cdot (1-A) + k_{AU} \cdot U \cdot C \cdot (1-A) - k_{A\_decay} \cdot A)dt + \sigma_A dW_A$
 
-2.  **Diversity Dynamics** ($dD$):
-    $$dD = (k_{D\_growth}(1-D) - k_{DU} \cdot U \cdot D - k_{D\_decay}D^2)dt + \sigma_D dW_D$$
-    *Models the balance between niche creation and selection pressure.*
+2.  **Mathematical Challenge Arena**
+    *   **Focus**: Agents evolve to solve algebraic problems and generate novel conjectures.
+    *   **Mechanism**: A population of solver agents faces a curriculum of generated math problems. Success increases Complexity; unique solutions increase Diversity.
 
-3.  **Agency Dynamics** ($dA$):
-    $$dA = (k_{AC} \cdot C \cdot (1-A) + k_{AU} \cdot U \cdot C \cdot (1-A) - k_{A\_decay} \cdot A)dt + \sigma_A dW_A$$
-    *Models agency as a higher-order property emerging from complexity, accelerated by challenge.*
+3.  **AI Alignment Sandbox**
+    *   **Focus**: Testing safety constraints in a reward-driven environment.
+    *   **Mechanism**: Agents maximize reward while navigating a "Constraint Lattice". Violations trigger "Alignment Alerts".
 
-4.  **Alert Rate** ($dA_{alert}$):
-    $$dA_{alert\_rate} = \frac{1}{\tau} \cdot \sigma(\frac{A - A_{alert}}{\epsilon})dt$$
-    *Smooths the detection signal to identify robust threshold crossings indicating emergent agency.*
+4.  **Biological Evolution**
+    *   **Focus**: Evolutionary game theory models.
+    *   **Mechanism**: Predator-prey dynamics and resource competition in a spatially explicit grid.
+
+5.  **Multi-Agent Populations**
+    *   **Focus**: Social emergence and communication.
+    *   **Mechanism**: Agents interact to solve cooperative tasks, measuring the emergence of collective agency.
+
+### Agency Threshold Index (ATI)
+To rigorously detect agency, the system calculates the ATI using three key metrics:
+1.  **Causal Density**: The density of causal interactions within the system boundaries.
+2.  **Entropy Reduction**: The system's ability to maintain order against environmental noise.
+3.  **Persistence**: The stability of agentic structures over time.
 
 ## 🧠 AI-Driven Control
 
 The simulator features a dual-role AI system powered by **GPT-5.2-2025-12-11**:
 
 ### 1. The Hyper-Intelligent Researcher
-The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts:
--   **Environmental Difficulty ($U$)**: To challenge the system or protect it from collapse.
--   **Full SDE Parameter Tuning**: Fine-tuning stochastic coefficients ($k_{CD}$, $k_{AC}$, $k_{C\_decay}$, etc.) and noise levels ($\sigma$) to steer the system.
--   **Strategy & Memory**: The AI maintains a history of its actions to analyze the effectiveness of its interventions over time.
+The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts parameters to steer the system.
 
 ### 2. The Xenobiologist
-When the system successfully crosses the Agency Threshold ($A > 0.75$), the AI assumes the role of a Xenobiologist:
--   **Analysis**: Reviews the history and parameter "DNA" that led to emergence.
--   **Classification**: Generates a scientific name, "Spec Sheet" description, and tags for the new agent.
--   **Archival**: Saves the agent to the **Universal Agent Library**.
+When the system successfully crosses the Agency Threshold, the AI classifies and archives the emergent agent.
 
 ## ✨ Features
 
--   **Real-time SDE Integration**: High-performance Euler-Maruyama solver running in the renderer process.
--   **Universal Agent Library**: A persistent collection of discovered "Agents" (agency peaks), complete with their parameter "DNA", emergence history, and AI-generated lore. Stored as JSON files.
--   **WebGPU Acceleration**: Experimental WGSL-based implementation for massive parallel simulations (Ensemble Mode).
--   **AI Parameter Tuning**: Autonomous optimization of simulation parameters by an LLM agent.
--   **Agency Detection System**: Automated monitoring system that triggers alerts when agency ($A$) crosses critical thresholds.
--   **Interactive Dashboard**:
-    -   Live telemetry charts for $C$, $D$, and $A$ using **Recharts**.
-    -   Real-time "Agency Alert" logging.
-    -   Environment Control Slider ($U$ - Novelty/Difficulty).
-    -   Mathematical Typesetting with **KaTeX**.
-    -   Universal Library browser with **Lucide** icons.
--   **Validation Framework**: Built-in metrics to track state bounds violations and diversity floor compliance.
--   **Modern Tech Stack**: Built with Electron, React, TypeScript, and Zustand for state management.
+-   **Multi-Scenario Engine**: Plug-and-play architecture supporting SDEs, math puzzles, evolutionary games, and multi-agent systems.
+-   **ATI Metrics**: Real-time calculation of Causal Density, Entropy, and Persistence to rigorously detect agency.
+-   **3D Constraint Lattice**: Interactive Three.js visualization of the fitness landscape (Energy vs. Novelty vs. Fitness).
+-   **Simulation Replay**: Full state serialization allowing "Time Machine" replay and analysis of past runs.
+-   **Universal Agent Library**: Persistent storage of discovered agents with genetic metadata and lore.
+-   **WebGPU Acceleration**: Experimental compute shaders for massive population simulations.
+-   **AI-Driven Control**: Autonomous researcher (GPT-5.2) that tunes parameters and documents findings.
 
 ## 🚀 Getting Started
 
