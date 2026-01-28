@@ -1,6 +1,7 @@
-
-import { MathGenome, MathTask, MathClaim, MathExpression, MathOperator, MathProof } from './MathTypes';
+import { MathGenome, MathTask, MathClaim, MathExpression, MathOperator, MathProof, ASTGenomeData } from './MathTypes';
 import { PRNG } from '../../../common/prng';
+import { ASTGenomeFactory, ASTMutator } from './ASTGenome';
+import { NeuralGuide } from './NeuralGuide';
 
 export class MathAgent {
     public genome: MathGenome;
@@ -11,9 +12,14 @@ export class MathAgent {
 
     /**
      * Create a random agent
+     * @param useAST - If true, creates an AST-based genome for neuro-symbolic evolution
      */
-    static random(prng: PRNG): MathAgent {
-        // Genome now controls tendency to generate complex vs simple claims
+    static random(prng: PRNG, useAST: boolean = false): MathAgent {
+        if (useAST) {
+            return new MathAgent(ASTGenomeFactory.createRandom(prng));
+        }
+
+        // Standard numeric weights genome
         // [p_complexity, p_proof_effort, p_verification]
         const weights = [prng.next(), prng.next(), prng.next()];
         const sum = weights.reduce((a, b) => a + b, 0);
@@ -31,19 +37,38 @@ export class MathAgent {
     }
 
     /**
-     * Attempt to solve a standard task
+     * Attempt to solve a standard task (linear or quadratic)
      */
     public solve(task: MathTask, prng: PRNG): number {
-        const weights = this.genome.data as number[];
-        // Simple heuristic: Agents with high complexity preference (weights[0]) might overthink simple tasks
-        // Agents with high proof effort (weights[1]) might be more accurate
+        // Get accuracy probability based on genome type
+        let accuracyProbability: number;
+        let complexityWeight: number;
 
-        const accuracyProbability = 0.5 + (weights[1] * 0.5); // Baseline 50%, up to 100%
+        if (this.genome.type === 'ast') {
+            const astData = this.genome.data as ASTGenomeData;
+            // AST genomes use their mutation bias for accuracy
+            accuracyProbability = 0.6 + (astData.mutationBias.preferComplex * 0.3);
+            complexityWeight = astData.mutationBias.preferComplex;
+        } else {
+            const weights = this.genome.data as number[];
+            accuracyProbability = 0.5 + (weights[1] * 0.5);
+            complexityWeight = weights[0];
+        }
 
-        if (prng.next() < accuracyProbability) {
-            if (task.coefficients && task.coefficients.length === 3) {
+        // SOTA Recommendation: Connect Difficulty to Performance
+        const effectiveAccuracy = accuracyProbability * Math.max(0.1, (1 - task.difficulty));
+
+        if (prng.next() < effectiveAccuracy && task.coefficients) {
+            // Linear equation: ax + b = c → x = (c - b) / a
+            if (task.type === 'algebra_linear' && task.coefficients.length >= 3) {
                 const [a, b, c] = task.coefficients;
-                return (c - b) / a;
+                if (a !== 0) return (c - b) / a;
+            }
+
+            // Quadratic equation: ax² + bx + c = 0 (roots stored in coefficients)
+            if (task.type === 'algebra_quadratic' && task.coefficients.length >= 5) {
+                const [a, b, c, r1, r2] = task.coefficients;
+                return complexityWeight > 0.5 ? r1 : r2;
             }
         }
         return prng.nextInt(-100, 100);
@@ -53,14 +78,39 @@ export class MathAgent {
      * NCG: Generate a new Conjecture (Claim)
      */
     public generateClaim(prng: PRNG, difficulty: number): MathClaim {
-        // Generate a random math expression: Left = Right
-        const depth = Math.floor(1 + (this.genome.data as number[])[0] * 3 * difficulty);
+        let left: MathExpression;
+        let right: MathExpression;
+        let estimatedInterestingness = 0;
 
-        const left = this.generateExpression(depth, prng);
-        const right = this.generateExpression(depth, prng);
+        if (this.genome.type === 'ast') {
+            // AST genomes use their conjecture template as basis
+            const astData = this.genome.data as ASTGenomeData;
+            const mutator = new ASTMutator(prng);
 
-        // For MVP, the claim is 'left = right' for all variables
-        // We will just generate "Identity Candidates"
+            // Use template with mutations based on difficulty
+            left = mutator.mutate(astData.conjectureTemplate, difficulty * 0.5);
+            right = mutator.mutate(astData.conjectureTemplate, difficulty * 0.5);
+
+            // Neuro-Symbolic Guidance:
+            // If we have a neural guide, use it to evaluate/tweak the claim
+            if (astData.neuralGuide) {
+                // SOTA: Properly hydrate the neural guide
+                const neural = NeuralGuide.deserialize(astData.neuralGuide.weights);
+
+                // Feature extraction
+
+
+                // Feature extraction
+                const features = neural.featurize({ type: 'OP', op: 'EQ', left, right });
+                const prediction = neural.predict(features);
+                estimatedInterestingness = prediction[0]; // Output 0 is "interestingness"
+            }
+        } else {
+            // Standard numeric weights approach
+            const depth = Math.floor(1 + (this.genome.data as number[])[0] * 3 * difficulty);
+            left = this.generateExpression(depth, prng);
+            right = this.generateExpression(depth, prng);
+        }
 
         const claim: MathClaim = {
             id: `claim-${prng.nextInt(0, 100000)}`,
@@ -71,7 +121,7 @@ export class MathAgent {
                 right
             },
             text: `${this.exprToString(left)} = ${this.exprToString(right)}`,
-            noveltyScore: 0, // Calculated by Scenario
+            noveltyScore: estimatedInterestingness, // Initialize with neural prediction
             evidenceCount: 0,
             proven: false
         };
@@ -80,37 +130,32 @@ export class MathAgent {
         return claim;
     }
 
+    /**
+     * Generate a mathematical expression tree of given depth.
+     * Properly delegates to the recursive implementation.
+     */
     private generateExpression(depth: number, prng: PRNG): MathExpression {
-        if (depth <= 0 || prng.next() > 0.7) {
-            // Leaf: Variable or Number
-            if (prng.next() > 0.5) {
-                return { type: 'ATOM', value: 'x' }; // Single variable MVP
-            } else {
-                return { type: 'ATOM', value: prng.nextInt(1, 10) };
-            }
-        }
-
-        const ops: MathOperator[] = ['ADD', 'SUB', 'MUL']; // Keep simple for MVP
-        const op = ops[prng.nextInt(0, ops.length)];
-
-        return {
-            type: 'OP',
-            op: 'OP', // Logic bug in type def? MathOperator is separate. 
-            // Fixed:
-            // op property in interface is MathOperator.
-
-            // Re-doing return:
-            // But wait, my interface says op?: MathOperator.
-        } as any; // Type casting hack for logic block below
+        return this.generateExpressionRecursive(depth, prng);
     }
 
-    // Fixed implementation of recursion
+    /**
+     * Recursive expression tree generation with multi-variable support.
+     * Supports variables: x, y for richer mathematical expressions.
+     */
     private generateExpressionRecursive(depth: number, prng: PRNG): MathExpression {
-        const ops: MathOperator[] = ['ADD', 'SUB', 'MUL'];
+        const ops: MathOperator[] = ['ADD', 'SUB', 'MUL', 'DIV'];
+        const variables = ['x', 'y'];
 
         if (depth <= 0 || prng.next() < 0.3) {
-            if (prng.next() > 0.5) return { type: 'ATOM', value: 'x' };
-            return { type: 'ATOM', value: prng.nextInt(1, 5) };
+            // Leaf node: variable or constant
+            const leafType = prng.next();
+            if (leafType > 0.6) {
+                // Variable (x or y)
+                return { type: 'ATOM', value: variables[prng.nextInt(0, variables.length)] };
+            } else {
+                // Constant (1-5)
+                return { type: 'ATOM', value: prng.nextInt(1, 5) };
+            }
         }
 
         const op = ops[prng.nextInt(0, ops.length)];
@@ -184,15 +229,28 @@ export class MathAgent {
         }
     }
 
+    /**
+     * Check if a claim holds true across random samples.
+     * Uses deterministic sampling based on claim ID for reproducibility.
+     */
     private checkTruth(claim: MathClaim, samples: number): boolean {
         // Evaluate Left - Right == 0 ?
         if (claim.expression.op !== 'EQ' || !claim.expression.left || !claim.expression.right) return false;
 
+        // Use deterministic seed based on claim ID for reproducibility
+        const seedFromId = claim.id.split('-').reduce((acc, part) => acc + parseInt(part) || 0, 0);
+        const testPrng = new PRNG(seedFromId);
+
         for (let i = 0; i < samples; i++) {
-            const x = Math.random() * 20 - 10;
-            const vars = { x };
+            const x = testPrng.next() * 20 - 10;
+            const y = testPrng.next() * 20 - 10;
+            const vars = { x, y };
             const l = this.evaluate(claim.expression.left, vars);
             const r = this.evaluate(claim.expression.right, vars);
+
+            // Handle NaN/Infinity from division by zero
+            if (!isFinite(l) || !isFinite(r)) continue;
+
             if (Math.abs(l - r) > 0.001) return false;
         }
         return true;
@@ -202,6 +260,12 @@ export class MathAgent {
      * Mutate this agent
      */
     public mutate(prng: PRNG): MathAgent {
+        if (this.genome.type === 'ast') {
+            // Use AST-specific mutation
+            return new MathAgent(ASTGenomeFactory.mutate(this.genome, prng));
+        }
+
+        // Standard numeric weights mutation
         const weights = [...(this.genome.data as number[])];
         const idx = prng.nextInt(0, weights.length);
         weights[idx] += (prng.next() - 0.5) * 0.2;
@@ -212,7 +276,7 @@ export class MathAgent {
             type: 'numeric_weights',
             data: weights,
             solvedCount: 0,
-            complexityScore: weights[0] + weights[1], // Complexity now reflects genome strategy
+            complexityScore: weights[0] + weights[1],
             claimsGenerated: 0,
             theoremsProven: 0
         });

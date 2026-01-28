@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 import MetricsChart from './MetricsChart';
 import StateGauges from './StateGauges';
@@ -11,13 +11,30 @@ import { AIControlPanel } from './AIControlPanel';
 import InterventionLogPanel from './InterventionLogPanel';
 import AgencyLog from './AgencyLog';
 
+type TabType = 'main' | 'logs';
+
 const Dashboard: React.FC = () => {
+    const [activeTab, setActiveTab] = useState<TabType>('main');
+
     const {
         currentScenarioId,
         availableScenarios,
         scenarioMetadata,
         switchScenario
     } = useSimulationStore();
+
+    const tabButtonStyle = (isActive: boolean) => ({
+        background: isActive ? 'var(--color-primary)' : 'transparent',
+        border: `1px solid ${isActive ? 'var(--color-primary)' : 'var(--color-border)'}`,
+        color: isActive ? 'var(--color-bg)' : 'var(--color-text-secondary)',
+        borderRadius: '4px',
+        padding: '6px 16px',
+        cursor: 'pointer',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        letterSpacing: '0.5px',
+        transition: 'all 0.2s ease'
+    });
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '16px', height: '100%', padding: '16px', boxSizing: 'border-box' }}>
@@ -57,14 +74,41 @@ const Dashboard: React.FC = () => {
                 <AIControlPanel />
             </div>
 
-            {/* Right Column: Controls & Info */}
+            {/* Right Column: Controls & Info with Tabs */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: 0, overflowY: 'auto' }}>
-                <ControlPanel />
-                <AlertPanel />
-                <InterventionLogPanel />
-                <AgencyLog />
-                <ParameterPanel />
-                <ValidationPanel />
+                {/* Tab Navigation */}
+                <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                        onClick={() => setActiveTab('main')}
+                        style={tabButtonStyle(activeTab === 'main')}
+                    >
+                        MAIN
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('logs')}
+                        style={tabButtonStyle(activeTab === 'logs')}
+                    >
+                        LOGS
+                    </button>
+                </div>
+
+                {/* Main Tab Content */}
+                {activeTab === 'main' && (
+                    <>
+                        <ControlPanel />
+                        <AlertPanel />
+                        <ParameterPanel />
+                    </>
+                )}
+
+                {/* Logs Tab Content */}
+                {activeTab === 'logs' && (
+                    <>
+                        <InterventionLogPanel />
+                        <AgencyLog />
+                        <ValidationPanel />
+                    </>
+                )}
             </div>
 
         </div>

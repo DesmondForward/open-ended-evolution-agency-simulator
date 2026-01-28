@@ -47,8 +47,8 @@ export interface MathClaim {
 // A genome representing a solver strategy
 export interface MathGenome {
     id: string;
-    type: 'numeric_weights' | 'dsl';
-    data: number[] | string;
+    type: 'numeric_weights' | 'dsl' | 'ast';
+    data: number[] | string | ASTGenomeData;
 
     // Performance stats
     solvedCount: number;
@@ -57,6 +57,31 @@ export interface MathGenome {
     // NCG stats
     claimsGenerated: number;
     theoremsProven: number;
+}
+
+/**
+ * AST-based genome data for neuro-symbolic evolution.
+ * Instead of evolving weights, we evolve program structures directly.
+ */
+export interface ASTGenomeData {
+    // The "strategy" expression: how the agent approaches problem solving
+    solverStrategy: MathExpression;
+    // Template for generating conjectures
+    conjectureTemplate: MathExpression;
+    // Mutation parameters that evolve alongside the AST
+    mutationBias: {
+        preferVariables: number;   // 0-1: tendency to use variables vs constants
+        preferComplex: number;     // 0-1: tendency for deep vs shallow trees
+        operatorWeights: Record<MathOperator, number>; // relative weights for each operator
+    };
+
+    // Neural Guidance (Neuro-Symbolic)
+    neuralGuide?: NeuralGenomeData;
+}
+
+export interface NeuralGenomeData {
+    weights: any; // Serialized weights of the NeuralGuide
+    config: any;  // Configuration of the NeuralGuide
 }
 
 export interface MathConfig {
@@ -73,8 +98,8 @@ export interface MathConfig {
 
 export const DEFAULT_MATH_CONFIG: MathConfig = {
     populationSize: 50,
-    mutationRate: 0.1,
-    tasksPerGen: 10,
+    mutationRate: 0.15,
+    tasksPerGen: 40,
     difficultyScale: 1.0,
     noveltyThreshold: 0.5,
     verificationBudget: 100,

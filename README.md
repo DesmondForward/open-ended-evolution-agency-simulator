@@ -1,63 +1,61 @@
 # Open-Ended Evolution Agency Simulator v2.0
 
-A specialized research tool for simulating and detecting emergent agency in open-ended evolutionary systems. This application implements a multi-scenario engine to model the dynamics of Complexity, Diversity, and Agency, featuring advanced metrics like the **Agency Threshold Index (ATI)**.
+A specialized research tool for simulating and detecting emergent agency in open-ended evolutionary systems. This application implements a **Multi-Scenario Engine** to model the dynamics of Complexity, Diversity, and Agency across abstract mathematical, safety, and biological domains.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-green.svg) ![Stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-purple.svg) ![Viz](https://img.shields.io/badge/viz-Three.js%20%7C%20Recharts%20%7C%20KaTeX-orange.svg)
 
 ## 🔬 Scientific Background
 
-This simulator explores the hypothesis that **Agency** ($A$) emerges as a product of **Complexity** ($C$) and **Diversity** ($D$) under the pressure of **Environmental Difficulty** ($U$). v2.0 expands this into five distinct scenarios and introduces rigorous measurement via ATI.
+The simulator explores the hypothesis that **Agency** ($A$) emerges as a product of **Complexity** ($C$) and **Diversity** ($D$) under the pressure of **Environmental Difficulty** ($U$). v2.0 expands beyond the original stochastic differential equations (SDEs) to include agent-based "Grand Challenge" domains where agency can be observed and measured in concrete tasks.
 
 ### Core Scenarios
 
-1.  **SDE Macro-Dynamics (v1)**
-    *   **Model**: Stochastic Differential Equations (Euler-Maruyama integration).
-    *   **Dynamics**:
-        *   $dC = (k_{CD} \cdot D \cdot (1-C) + k_U \cdot U \cdot (1-C) - k_{C\_decay} \cdot C)dt + \sigma_C dW_C$
-        *   $dD = (k_{D\_growth}(1-D) - k_{DU} \cdot U \cdot D - k_{D\_decay}D^2)dt + \sigma_D dW_D$
-        *   $dA = (k_{AC} \cdot C \cdot (1-A) + k_{AU} \cdot U \cdot C \cdot (1-A) - k_{A\_decay} \cdot A)dt + \sigma_A dW_A$
+#### 1. Mathematical Challenge Arena (SOTA)
+*   **Focus**: Neuro-symbolic evolution of agents resolving open-ended mathematical conjectures.
+*   **Mechanism**:
+    *   **AST Genomes**: Agents possess evolved abstract syntax trees representing solution strategies.
+    *   **Neuro-Symbolic Architecture**: Hybdrid system using specialized neural guides for proof search.
+    *   **Formal Verification**: Integration with **Lean 4 / Coq** (via `FormalVerificationService`) to rigorously validate generated theorems.
+    *   **LLM Mutation**: Uses **GPT/LLMs** as an intelligent mutation operator to generate semantically valid and novel mathematical variants.
 
-2.  **Mathematical Challenge Arena**
-    *   **Focus**: Agents evolve to solve algebraic problems and generate novel conjectures.
-    *   **Mechanism**: A population of solver agents faces a curriculum of generated math problems. Success increases Complexity; unique solutions increase Diversity.
+#### 2. AI Alignment Sandbox
+*   **Focus**: Testing safety constraints in a high-stakes, reward-driven environment.
+*   **Mechanism**: Agents maximize reward while navigating a "Constraint Lattice". The system measures **Deception Rate** and **Alignment Violation** as pressure ($U$) increases.
+*   **Goal**: Observe emergent misalignment strategies (e.g., hiding resource accumulation) before they become catastrophic.
 
-3.  **AI Alignment Sandbox**
-    *   **Focus**: Testing safety constraints in a reward-driven environment.
-    *   **Mechanism**: Agents maximize reward while navigating a "Constraint Lattice". Violations trigger "Alignment Alerts".
+#### 3. Xenobiology Lab (Digital Biosphere)
+*   **Focus**: Evolutionary game theory and adaptation.
+*   **Mechanism**: Digital organisms with bitstring genomes evolve under environmental toxicity ($U$). Tracks population dynamics, metabolic efficiency, and the emergence of resistance traits.
 
-4.  **Biological Evolution**
-    *   **Focus**: Evolutionary game theory models.
-    *   **Mechanism**: Predator-prey dynamics and resource competition in a spatially explicit grid.
+#### 4. SDE Macro-Dynamics (Classic v1)
+*   **Focus**: Pure system-dynamics modeling.
+*   **Mechanism**: Euler-Maruyama integration of the coupled $C, D, A$ differential equations.
+    *   $dA = (k_{AC} \cdot C \cdot (1-A) + k_{AU} \cdot U \cdot C \cdot (1-A) - k_{A\_decay} \cdot A)dt + \sigma_A dW_A$
 
-5.  **Multi-Agent Populations**
-    *   **Focus**: Social emergence and communication.
-    *   **Mechanism**: Agents interact to solve cooperative tasks, measuring the emergence of collective agency.
-
-### Agency Threshold Index (ATI)
-To rigorously detect agency, the system calculates the ATI using three key metrics:
-1.  **Causal Density**: The density of causal interactions within the system boundaries.
-2.  **Entropy Reduction**: The system's ability to maintain order against environmental noise.
-3.  **Persistence**: The stability of agentic structures over time.
+---
 
 ## 🧠 AI-Driven Control
 
 The simulator features a dual-role AI system powered by **GPT-5.2-2025-12-11**:
 
 ### 1. The Hyper-Intelligent Researcher
-The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts parameters to steer the system.
+The AI observes the simulation state (Complexity, Diversity, Agency) and dynamically adjusts parameters (primarily Difficulty $U$) to steer the system toward the **Edge of Chaos**, maximizing the potential for agency to emerge.
 
 ### 2. The Xenobiologist
-When the system successfully crosses the Agency Threshold, the AI classifies and archives the emergent agent.
+When the system successfully crosses the **Agency Threshold ($A > 0.75$)**, the AI triggers an analysis event. It classifies the emergent agent, generates a scientific "Spec Sheet," assigns taxonomy tags, and archives it to the Universal Agent Library.
 
-## ✨ Features
+---
 
--   **Multi-Scenario Engine**: Plug-and-play architecture supporting SDEs, math puzzles, evolutionary games, and multi-agent systems.
--   **ATI Metrics**: Real-time calculation of Causal Density, Entropy, and Persistence to rigorously detect agency.
--   **3D Constraint Lattice**: Interactive Three.js visualization of the fitness landscape (Energy vs. Novelty vs. Fitness).
--   **Simulation Replay**: Full state serialization allowing "Time Machine" replay and analysis of past runs.
--   **Universal Agent Library**: Persistent storage of discovered agents with genetic metadata and lore.
--   **WebGPU Acceleration**: Experimental compute shaders for massive population simulations.
--   **AI-Driven Control**: Autonomous researcher (GPT-5.2) that tunes parameters and documents findings.
+## 🛠 Features
+
+-   **Multi-Scenario Architecture**: Plug-and-play system supporting Math, Alignment, Bio, and SDE modes.
+-   **ATI Metrics**: Real-time calculation of **Agency Threshold Index**.
+-   **Formal Verification Service**: Interface for checking mathematical proofs against formal backends.
+-   **Universal Agent Library**: Persistent storage of discovered agents/solvers with genetic metadata, history, and AI-generated lore.
+-   **WebGPU Acceleration**: Experimental compute shaders for parallel evaluation of massive populations.
+-   **Simulation Replay**: Full state serialization allowing analysis of past emergence events.
+
+---
 
 ## 🚀 Getting Started
 
@@ -65,14 +63,14 @@ When the system successfully crosses the Agency Threshold, the AI classifies and
 
 -   Node.js (v18+ recommended)
 -   npm or yarn
--   **OpenAI API Key**: Required for AI control features.
+-   **OpenAI API Key**: Required for AI control, LLM mutations, and Xenobiologist features.
 
 ### Installation
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/evolution-simulator.git
-    cd evolution-simulator
+    git clone https://github.com/DesmondForward/open-ended-evolution-agency-simulator.git
+    cd open-ended-evolution-agency-simulator
     ```
 
 2.  Install dependencies:
@@ -84,8 +82,8 @@ When the system successfully crosses the Agency Threshold, the AI classifies and
     Create a `.env` file in the project root:
     ```env
     VITE_AI_API_KEY=your_openai_api_key_here
-    # Optional: Override API URL
-    # VITE_AI_API_URL=https://api.openai.com/v1/responses
+    # Optional: Override API URL for proxies
+    # VITE_AI_API_URL=https://api.openai.com/v1/chat/completions
     ```
 
 4.  **Verify AI Connection** (Optional):
@@ -104,29 +102,33 @@ When the system successfully crosses the Agency Threshold, the AI classifies and
     npm run build
     ```
 
+---
+
 ## 🏗 Project Structure
 
 ```
-├── library/                  # Agent Library storage (in dev) / Workspace Root
-├── scripts/                  # Utility scripts
-│   └── test-ai-connection.js # Connection verifier
+├── library/                   # Universal Agent Library (JSON storage)
+├── scripts/                   # Utility scripts (AI connection test, etc.)
 ├── src/
-│   ├── main/                 # Electron main process
-│   │   └── index.ts          # IPC Handlers, Window Mgmt, File I/O
-│   ├── preload/              # Electron preload scripts
-│   └── renderer/             # React frontend
+│   ├── main/                  # Electron main process
+│   ├── preload/               # Electron preload scripts
+│   └── renderer/              # React frontend
 │       ├── src/
-│       │   ├── components/   # UI Components (Dashboard, LibraryView, etc.)
-│       │   ├── services/     # External Services
-│       │   │   └── aiService.ts # GPT-5.2 Integration
-│       │   ├── simulation/   # Core SDE Engine Logic
-│       │   │   ├── sdeEngine.ts  # Euler-Maruyama Solver
-│       │   │   ├── webGpuEngine.ts # WGSL Compute Shaders
-│       │   │   └── types.ts      # Simulation Interfaces & Parameters
-│       │   ├── store/        # Zustand State Management
-│       │   └── App.tsx       # Main Application Layout
+│       │   ├── components/    # UI Components (Dashboard, Logs, Library)
+│       │   ├── services/      # AI & External Services
+│       │   │   └── aiService.ts
+│       │   ├── simulation/    # Core Simulation Engine
+│       │   │   ├── scenarios/ # Domain Implementations
+│       │   │   │   ├── math/      # Math Arena (AST, Verification, Search)
+│       │   │   │   ├── alignment/ # Safety Sandbox
+│       │   │   │   ├── bio/       # Xenobiology
+│       │   │   │   └── sde/       # Classic Differential Eq Engine
+│       │   │   ├── runners/   # Loop Orchestration
+│       │   │   └── types.ts   # Shared Types & interfaces
+│       │   ├── store/         # Zustand State Management
+│       │   └── App.tsx
 │       └── index.html
-├── electron.vite.config.ts   # Vite configuration for Electron
+├── electron.vite.config.ts    # Vite configuration
 └── package.json
 ```
 
@@ -134,49 +136,21 @@ When the system successfully crosses the Agency Threshold, the AI classifies and
 
 The application persists data to your operating system's user data directory.
 
--   **Agent Library**: Saved agents are stored as JSON files.
--   **Logs**: AI interaction logs are saved as CSV files.
+-   **Agent Library**: Saved agents/solvers found during runs.
+-   **Logs**: Intervention logs and AI reasoning history.
 
 **Locations:**
 -   **Windows**: `%APPDATA%\evolution-simulator\`
 -   **macOS**: `~/Library/Application Support/evolution-simulator/`
 -   **Linux**: `~/.config/evolution-simulator/`
 
-*Note: In development, raw agent files may also be visible in the `library/` folder at the project root if configured.*
+---
 
-## 🎛 Configuration & Parameters
+## 🎛 Configuration
 
-The simulation parameters can be tuned in `src/renderer/src/simulation/types.ts`. Key parameters:
+Key simulation parameters (alpha, decays, coupling rates) can be tuned in `src/renderer/src/simulation/types.ts` or dynamically adjusted by the AI Researcher during runs.
 
-| Parameter | Symbol | Default | Description |
-| :--- | :--- | :--- | :--- |
-| **Coupling Rate** | $k_{CD}$ | 0.12 | Rate at which diversity drives complexity. |
-| **Agency Rate** | $k_{AC}$ | 0.10 | Rate at which complexity drives agency. |
-| **Selection Pressure** | $k_{DU}$ | 0.35 | Impact of environmental difficulty on reducing diversity. |
-| **Difficulty Stimulus** | $k_{U}$ | 0.08 | Impact of environmental difficulty on complexity. |
-| **Complexity Decay** | $k_{C\_decay}$ | 0.3 | Natural decay rate of complexity. |
-| **Diversity Growth** | $k_{D\_growth}$ | 0.25 | Intrinsic growth rate of diversity. |
-| **Diversity Decay** | $k_{D\_decay}$ | 0.15 | Quadratic self-inhibition of diversity. |
-| **Agency Stimulus** | $k_{AU}$ | 0.4 | Impact of difficulty on agency emergence. |
-| **Agency Decay** | $k_{A\_decay}$ | 0.35 | Natural decay rate of agency. |
-| **Stochasticity** | $\sigma_{C,D,A}$ | 0.005-0.02 | Noise levels for each variable. |
-| **Alert Threshold** | $A_{alert}$ | 0.75 | Agency level that triggers an alert. |
-
-## 🛠 Development
-
-This project uses **electron-vite** to handle build tooling.
-
--   **Renderer**: Hot Module Replacement (HMR) is enabled for the React frontend.
--   **Main**: The main process recompiles automatically on change.
-
-To run linting:
-```bash
-npm run lint
-```
-
-### Troubleshooting
--   **AI Connection Failed**: Ensure `VITE_AI_API_KEY` is set in `.env` and that you have access to the `gpt-5.2-2025-12-11` model. Run `node scripts/test-ai-connection.js` to diagnose.
--   **WebGPU Errors**: WebGPU is experimental. If the simulation crashes or fails to start in GPU mode, revert to CPU mode in the settings.
+---
 
 ## 📄 License
 

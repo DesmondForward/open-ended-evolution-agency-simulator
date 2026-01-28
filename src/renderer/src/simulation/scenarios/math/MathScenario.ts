@@ -8,8 +8,10 @@ import {
 } from '../../types';
 import { PRNG } from '../../../common/prng';
 import { MathState, MathConfig, DEFAULT_MATH_CONFIG, MathClaim } from './MathTypes';
-import { MathTaskGenerator } from './TaskGenerator';
+import { AdversarialTaskGenerator, computePopulationStats } from './AdversarialTaskGenerator';
 import { MathAgent } from './MathAgent';
+import { getFormalVerificationService } from './FormalVerificationService';
+import { ASTGenomeFactory } from './ASTGenome';
 
 export class MathScenario implements Scenario<MathConfig> {
     public metadata: ScenarioMetadata = {
@@ -23,15 +25,16 @@ export class MathScenario implements Scenario<MathConfig> {
     private state: MathState;
     private config: MathConfig;
     private prng: PRNG;
-    private taskGenerator: MathTaskGenerator;
+    private taskGenerator: AdversarialTaskGenerator;
     private eventQueue: ScenarioEvent[] = [];
+    private previousAgency: number = 0;
 
     // Internal tracking
     private currentU: number = 0;
 
     constructor() {
         this.prng = new PRNG(Date.now());
-        this.taskGenerator = new MathTaskGenerator(Date.now());
+        this.taskGenerator = new AdversarialTaskGenerator(Date.now());
         this.config = { ...DEFAULT_MATH_CONFIG };
         this.state = this.getEmptyState();
     }
@@ -53,7 +56,7 @@ export class MathScenario implements Scenario<MathConfig> {
 
     public initialize(seed: number, config?: MathConfig) {
         this.prng.setSeed(seed);
-        this.taskGenerator = new MathTaskGenerator(seed);
+        this.taskGenerator = new AdversarialTaskGenerator(seed);
         if (config) {
             this.config = { ...DEFAULT_MATH_CONFIG, ...config };
         }
@@ -61,7 +64,8 @@ export class MathScenario implements Scenario<MathConfig> {
         // Initialize Population
         const agents: any[] = [];
         for (let i = 0; i < this.config.populationSize; i++) {
-            agents.push(MathAgent.random(this.prng).genome);
+            // SOTA Recommendation: Use Neuro-Symbolic Agents (AST)
+            agents.push(MathAgent.random(this.prng, true).genome);
         }
 
         this.state = {
@@ -86,11 +90,15 @@ export class MathScenario implements Scenario<MathConfig> {
         this.currentU = control.U;
         this.state.generation += 1;
 
-        // 1. Generate Standard Tasks (Curriculum)
+        // 1. Generate Standard Tasks (Curriculum) - PAIRED
         if (this.state.generation % 1 === 0) {
+            // Compute stats for adversarial generation
+            const solveRates = this.state.agents.map(a => a.solvedCount / Math.max(1, this.config.tasksPerGen));
+            const popStats = computePopulationStats(solveRates, this.state.agents);
+
             this.state.currentTasks = [];
             for (let i = 0; i < this.config.tasksPerGen; i++) {
-                this.state.currentTasks.push(this.taskGenerator.generate(control.U));
+                this.state.currentTasks.push(this.taskGenerator.generate(popStats));
             }
         }
 
@@ -110,8 +118,19 @@ export class MathScenario implements Scenario<MathConfig> {
             let solved = 0;
             this.state.currentTasks.forEach(task => {
                 const ans = agent.solve(task, this.prng);
-                if (this.taskGenerator.validate(task, ans)) {
+                // Simple validation for PAIRED
+                // We check if abs(ans - target) < epsilon
+                let isCorrect = false;
+                if (task.targetValue !== undefined) {
+                    isCorrect = Math.abs(ans - task.targetValue) < 0.001;
+                }
+
+                if (isCorrect) {
                     solved++;
+                    // Feedback to generator
+                    this.taskGenerator.recordPerformance(task, 1.0);
+                } else {
+                    this.taskGenerator.recordPerformance(task, 0.0);
                 }
             });
             agent.genome.solvedCount = solved;
@@ -153,28 +172,42 @@ export class MathScenario implements Scenario<MathConfig> {
                 const unproven = this.state.claims.filter(c => !c.proven);
                 if (unproven.length > 0) {
                     const target = unproven[this.prng.nextInt(0, unproven.length)];
-                    const proof = agent.prove(target, this.prng);
 
-                    if (proof && proof.isValid) {
-                        target.proven = true;
-                        target.proof = proof;
-                        score += 10.0; // Big bonus for proof
-                        proofsFoundThisGen++;
+                    // FORMAL VERIFICATION INTERGRATION
+                    // Instead of the agent "proving" it (which was just random + effort),
+                    // we actually check it against the formal verifier.
+                    // The agent's role is to FIND the theorem, the system verifies it.
 
-                        this.eventQueue.push({
-                            type: 'task_solved', // Reusing type
-                            timestamp: this.state.generation,
-                            data: { claim: target.text, agent: agent.genome.id },
-                            message: `THEOREM PROVEN: ${target.text}`
-                        });
-                    } else {
-                        // Failed proof attempt
-                        // Did they find a counter-example?
-                        if (proof === undefined) {
-                            // Implicitly found counter-example in checkTruth
-                            // Implementation detail: agent.prove returns undefined if checkTruth fails
-                            // We could make this explicit in `prove` return type for full fidelity
+                    // Optimization: Only verify if the agent is high-quality enough to likely be correct
+                    // or if we have budget.
+
+                    const verifier = getFormalVerificationService();
+
+                    // Note: verify is async, but step() is sync.
+                    // For now we assume mock verification which is fast, or we fire-and-forget
+                    // In a robust engine we'd await this or queue it.
+                    // We'll treat it as a promise but since we are in a sync loop we might miss it this tick
+                    // For this implementation we will force a sync-like behavior or just let it handle in background
+
+                    verifier.verify(target).then(result => {
+                        if (result.verified) {
+                            target.proven = true;
+                            // Update score retrospectively or just reward implicitly by it being in the pool
+                            this.eventQueue.push({
+                                type: 'task_solved',
+                                timestamp: this.state.generation,
+                                data: { claim: target.text, agent: agent.genome.id, backend: result.backend },
+                                message: `THEOREM PROVEN (${result.backend}): ${target.text}`
+                            });
                         }
+                    });
+
+                    // Legacy "agent.prove()" call to simulate effort/cost
+                    const proof = agent.prove(target, this.prng);
+                    if (proof && proof.isValid) {
+                        // We give immediate credit for "finding a proof path"
+                        score += 10.0;
+                        proofsFoundThisGen++;
                     }
                 }
             }
@@ -191,10 +224,25 @@ export class MathScenario implements Scenario<MathConfig> {
         const nextGen: any[] = [];
         elites.forEach(e => nextGen.push(e.genome));
 
+        // Async Mutation Handling (LLM)
+        // Since step() is synchronous, we'll do best-effort sync mutation here
+        // and trigger async LLM mutation for the NEXT frame if possible.
+        // For simplicity in this loop, we stick to sync mutation but call the factory method
+        // which has a fallback.
+
+        // We will perform standard mutation for now, but if we wanted LLM we'd need to make step() async
+        // or have a "pending agents" queue.
+
         while (nextGen.length < this.config.populationSize) {
             const parent = elites[this.prng.nextInt(0, elites.length)];
+
+            // Standard mutation (MathAgent.mutate -> wrapper around factory)
             const child = parent.mutate(this.prng);
             nextGen.push(child.genome);
+
+            // Opportunity to sprinkle in LLM mutation if enabled?
+            // This would require a major refactor to async-await the whole engine loop
+            // or managing promises. 
         }
 
         this.state.agents = nextGen;
@@ -207,7 +255,10 @@ export class MathScenario implements Scenario<MathConfig> {
         const newA = successRate;
 
         // Diversity
-        const weights = nextGen.map(g => (g.data as number[])[1]); // use "proof effort" weight
+        const weights = nextGen.map(g => {
+            if (g.type === 'ast') return g.complexityScore;
+            return (g.data as number[])[1]; // use "proof effort" weight
+        });
         const mean = weights.reduce((a, b) => a + b, 0) / weights.length;
         const variance = weights.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / weights.length;
         const newD = Math.min(1, Math.sqrt(variance) * 4);
@@ -233,8 +284,32 @@ export class MathScenario implements Scenario<MathConfig> {
         this.state.metrics.totalProvenTheorems = this.state.claims.filter(c => c.proven).length;
 
         // Agency Threshold Event
-        if (this.state.metrics.A > 0.75) {
-            // Rate limit?
+        const dA = this.state.metrics.A - (this.previousAgency || 0);
+        this.previousAgency = this.state.metrics.A;
+
+        // SOTA Recommendation: Dynamic Timing & Saturation Detection
+        // If we are in the critical window (Gen > 500) and saturated (High A, Low dA)
+        if (this.state.generation > 500 && this.state.metrics.A > 0.95 && Math.abs(dA) < 0.001) {
+            // Check if we already intervened recently
+            const lastIntervention = this.eventQueue.filter(e => e.type === 'custom' && e.message.includes('MASS EXTINCTION')).pop();
+            const lastGen = lastIntervention ? lastIntervention.timestamp : 0;
+
+            if (this.state.generation - lastGen > 200) {
+                // INTERVENTION: Mass Extinction
+                // Keep top 5% elites, replace rest with fresh random AST agents
+                const survivors = this.state.agents.slice(0, Math.floor(this.config.populationSize * 0.05));
+                while (survivors.length < this.config.populationSize) {
+                    survivors.push(MathAgent.random(this.prng, true).genome);
+                }
+                this.state.agents = survivors;
+
+                this.eventQueue.push({
+                    type: 'custom',
+                    timestamp: this.state.generation,
+                    data: { dA, A: this.state.metrics.A },
+                    message: '⚠️ CRITICAL SATURATION DETECTED: TRIGGERING MASS EXTINCTION'
+                });
+            }
         }
     }
 

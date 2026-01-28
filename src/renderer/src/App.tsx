@@ -94,7 +94,6 @@ function App(): JSX.Element {
             {/* Main Content */}
             <div style={{ height: 'calc(100vh - 40px)', position: 'relative' }}>
                 <Dashboard />
-                <Dashboard />
                 {showLibrary && <LibraryView onClose={() => setShowLibrary(false)} />}
                 {showLattice && (
                     <div style={{
