@@ -135,6 +135,10 @@ export interface SavedAgent {
         C: number;
         D: number;
         alertRate: number;
+        /** Estimated spatial/temporal goal horizon (Levin's Cognitive Light Cone) */
+        cognitiveHorizon?: number;
+        /** TAME Competency score: recovery from perturbations */
+        competency?: number;
     };
 
     // The "DNA"
@@ -218,7 +222,8 @@ export type ScenarioEventType =
     | 'constraint_violated'
     | 'extinction'
     | 'intervention'
-    | 'custom';
+    | 'custom'
+    | 'agent_emerged';
 
 export interface ScenarioEvent {
     type: ScenarioEventType;

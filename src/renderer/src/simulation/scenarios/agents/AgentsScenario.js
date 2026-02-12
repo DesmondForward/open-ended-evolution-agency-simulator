@@ -1,42 +1,29 @@
-
-import {
-    Scenario,
-    ScenarioMetadata,
-    ControlSignal,
-    TelemetryPoint,
-    ScenarioEvent
-} from '../../types';
 import { PRNG } from '../../../common/prng';
-import { AgentScenarioState, AgentConfig, DEFAULT_AGENT_CONFIG, AgentTask, ActionType } from './AgentTypes';
+import { DEFAULT_AGENT_CONFIG } from './AgentTypes';
 import { AgentLogic } from './AgentLogic';
 import * as AgencyMetrics from '../../metrics/AgencyMetrics';
 import { SimulationLogger } from '../../logging/SimulationLogger';
-
-export class AgentsScenario implements Scenario<AgentConfig> {
-    public metadata: ScenarioMetadata = {
+export class AgentsScenario {
+    metadata = {
         id: 'agents',
         name: 'Emergent Task Decomposition',
         description: 'Agents evolve hierarchical plans and reusable skills to solve shifting tasks.',
         version: '0.1.0',
         type: 'agents'
     };
-
-    private state: AgentScenarioState;
-    private config: AgentConfig;
-    private prng: PRNG;
-    private eventQueue: ScenarioEvent[] = [];
-
+    state;
+    config;
+    prng;
+    eventQueue = [];
     // Drift tracking
-    private currentRequirements: Record<ActionType, number>;
-
+    currentRequirements;
     constructor() {
         this.prng = new PRNG(Date.now());
         this.config = { ...DEFAULT_AGENT_CONFIG };
         this.state = this.getEmptyState();
         this.currentRequirements = this.getDefaultRequirements();
     }
-
-    private getEmptyState(): AgentScenarioState {
+    getEmptyState() {
         return {
             generation: 0,
             agents: [],
@@ -50,8 +37,7 @@ export class AgentsScenario implements Scenario<AgentConfig> {
             }
         };
     }
-
-    private getDefaultRequirements(): Record<ActionType, number> {
+    getDefaultRequirements() {
         return {
             NAVIGATE: 30,
             COMPUTE: 10,
@@ -59,21 +45,18 @@ export class AgentsScenario implements Scenario<AgentConfig> {
             COMMUNICATE: 5
         };
     }
-
-    public initialize(seed: number, config?: AgentConfig) {
+    initialize(seed, config) {
         this.prng.setSeed(seed);
-        if (config) this.config = { ...DEFAULT_AGENT_CONFIG, ...config };
-
+        if (config)
+            this.config = { ...DEFAULT_AGENT_CONFIG, ...config };
         this.state = this.getEmptyState();
         this.currentRequirements = this.getDefaultRequirements();
-
         // Spawn Initial Pop
         for (let i = 0; i < this.config.populationSize; i++) {
             this.state.agents.push(AgentLogic.random(this.prng, 0));
         }
     }
-
-    public updateConfig(config: Partial<AgentConfig>) {
+    updateConfig(config) {
         const next = { ...this.config, ...config };
         if (!Number.isFinite(next.populationSize) || next.populationSize < 1) {
             next.populationSize = 1;
@@ -85,42 +68,35 @@ export class AgentsScenario implements Scenario<AgentConfig> {
         next.tasksPerGen = Math.floor(next.tasksPerGen);
         this.config = next;
     }
-
-    public step(control: ControlSignal) {
+    step(control) {
         this.state.generation++;
-
         if (this.state.agents.length === 0) {
             for (let i = 0; i < this.config.populationSize; i++) {
                 this.state.agents.push(AgentLogic.random(this.prng, this.state.generation));
             }
         }
-
         // 1. Task Drift
         // U drives the drift rate? Or drift magnitude?
         const drift = control.U * this.config.driftRate;
-
         // Randomly adjust one requirement baseline
-        const types: ActionType[] = ['NAVIGATE', 'COMPUTE', 'MANIPULATE', 'COMMUNICATE'];
+        const types = ['NAVIGATE', 'COMPUTE', 'MANIPULATE', 'COMMUNICATE'];
         if (this.prng.next() < 0.2) {
             const target = types[this.prng.nextInt(0, types.length)];
             // Drift up or down
             const change = (this.prng.next() - 0.5) * 20 * drift;
             this.currentRequirements[target] = Math.max(0, this.currentRequirements[target] + change);
-
             if (Math.abs(change) > 5) {
                 // Notable shift
             }
         }
-
         // 2. Generate Tasks
         this.state.currentTasks = [];
         for (let i = 0; i < this.config.tasksPerGen; i++) {
             // Jitter around current requirements
-            const taskReqs: Record<ActionType, number> = {} as any;
+            const taskReqs = {};
             types.forEach(t => {
                 taskReqs[t] = Math.max(0, this.currentRequirements[t] + (this.prng.next() - 0.5) * 10);
             });
-
             this.state.currentTasks.push({
                 id: `task-${this.state.generation}-${i}`,
                 requirements: taskReqs,
@@ -128,36 +104,30 @@ export class AgentsScenario implements Scenario<AgentConfig> {
                 driftFactor: drift
             });
         }
-
         // 3. Evaluate Agents
         let totalSuccess = 0;
         let totalSkillUsage = 0;
         let totalActions = 0;
-
         const evaluatedAgents = this.state.agents.map(entity => {
             const logic = new AgentLogic(entity);
             let score = 0;
             let agentTotalCost = 0;
-
             this.state.currentTasks.forEach(task => {
                 const result = logic.solve(task, this.prng);
-                if (result.success) score++;
+                if (result.success)
+                    score++;
                 agentTotalCost += result.cost;
-
                 totalActions += 1; // Or sum of requirements? 
                 totalSkillUsage += result.usedSkills; // Logic returns count of skills used
             });
-
             entity.score = score;
             totalSuccess += score;
-
             // Calculate Agent-Specific Novelty (Behavioral Variance)
             let novelty = 0;
             if (entity.previousPolicyState) {
                 const currentPolicy = logic.getPolicyState();
                 novelty = AgencyMetrics.computeBehavioralVariance(entity.previousPolicyState, currentPolicy);
             }
-
             // Log to Lattice
             SimulationLogger.logAgent({
                 generation: this.state.generation,
@@ -167,55 +137,42 @@ export class AgentsScenario implements Scenario<AgentConfig> {
                 novelty: novelty,
                 fitness: score
             });
-
             return logic;
         });
-
         // 4. Selection (Tournament or Elite)
         // Sort by score
         evaluatedAgents.sort((a, b) => b.entity.score - a.entity.score);
-
         const survivorCount = Math.max(1, Math.floor(this.config.populationSize * 0.4));
         const survivors = evaluatedAgents.slice(0, Math.min(survivorCount, evaluatedAgents.length));
-
-        const nextGen: any[] = [];
+        const nextGen = [];
         // Elitism: keep survivors
         survivors.forEach(l => nextGen.push(l.entity)); // Keep state? Or reset?
         // Reset score for next gen
         nextGen.forEach(e => e.score = 0);
-
         // Fill with mutants
         while (nextGen.length < this.config.populationSize) {
             const parent = survivors[this.prng.nextInt(0, survivors.length)];
             const child = parent.mutate(this.prng, this.state.generation);
             nextGen.push(child);
         }
-
         this.state.agents = nextGen;
-
         // 5. Metrics
         const totalTasks = this.config.populationSize * this.config.tasksPerGen;
         const successRate = totalSuccess / Math.max(1, totalTasks);
-
         // Skill Reuse Rate = (Skills Used / Total Actions that could use skills)
         // Wait, 'usedSkills' is count of skills used per task. 
         // A task has N reqs. If we used M skills, reuse rate implies we didn't just 'solve raw'.
         // Let's normalize: Skill Usage per Task Solve?
         const reuse = totalActions > 0 ? totalSkillUsage / totalActions : 0;
-
         const avgToolbox = nextGen.reduce((acc, a) => acc + a.skills.length, 0) / nextGen.length;
-
         // Agency => Success Rate * Reuse Rate (Efficiency)
         const newA = successRate * (0.5 + 1.5 * reuse); // Bonus for intelligent reuse
-
         // --- Agency Metrics Calculation ---
         // 1. World Uncertainty (H)
         const H = AgencyMetrics.computeEntropy(this.state.currentTasks);
-
         // 2. Energy Spent (E) - Total complexity of tasks attempted (or resolved)
         // Using totalActions as a proxy for "steps taken" or energy spent
         const E = totalActions;
-
         // 3. Behavioral Variance (BV)
         // Average distance between each agent's previous policy and current policy
         let totalBV = 0;
@@ -226,7 +183,6 @@ export class AgentsScenario implements Scenario<AgentConfig> {
             }
         });
         const avgBV = this.state.agents.length > 0 ? totalBV / this.state.agents.length : 0;
-
         // 4. Adaptive Feedback Gain (AFG)
         // We need delta Score (improvement from previous gen). 
         // We don't track total score history in state for simplicity, let's approximate:
@@ -234,14 +190,11 @@ export class AgentsScenario implements Scenario<AgentConfig> {
         const prevSuccessRate = this.state.metrics.taskSuccessRate || 0.01;
         const deltaSuccess = successRate - prevSuccessRate;
         const AFG = AgencyMetrics.computeFeedbackGain(avgBV, deltaSuccess);
-
         // 5. Energy Efficiency (EE)
         const prevH = this.state.metrics.H || H; // If first step, delta is 0
         const EE = AgencyMetrics.computeEnergyEfficiency(prevH, H, E);
-
         // 6. Emergent Intention (EI)
         const EI = AgencyMetrics.computeEmergentIntention(EE, AFG, avgBV, successRate);
-
         // Update State Metrics
         const alpha = 0.1;
         this.state.metrics.A = this.state.metrics.A * (1 - alpha) + newA * alpha; // Keep legacy A for now
@@ -249,14 +202,12 @@ export class AgentsScenario implements Scenario<AgentConfig> {
         this.state.metrics.averageToolboxSize = avgToolbox;
         this.state.metrics.taskSuccessRate = successRate;
         this.state.metrics.U = control.U;
-
         // New Metrics
         this.state.metrics.H = H;
         this.state.metrics.E = E;
         this.state.metrics.BV = avgBV;
         this.state.metrics.AFG = AFG;
         this.state.metrics.EI = EI;
-
         if (this.state.metrics.EI > 0.8) {
             this.eventQueue.push({
                 type: 'threshold_crossed',
@@ -264,12 +215,10 @@ export class AgentsScenario implements Scenario<AgentConfig> {
                 data: { A: this.state.metrics.A },
                 message: "High Agency: Efficient Skill Reuse Detected"
             });
-
             // Log the best agent
             // Find max fitness or max novelty agent
             if (this.state.agents.length > 0) {
                 const bestAgent = this.state.agents.reduce((prev, current) => (prev.score > current.score) ? prev : current);
-
                 this.eventQueue.push({
                     type: 'agent_emerged',
                     timestamp: this.state.generation,
@@ -303,8 +252,7 @@ export class AgentsScenario implements Scenario<AgentConfig> {
             }
         }
     }
-
-    public getMetrics(): TelemetryPoint {
+    getMetrics() {
         return {
             generation: this.state.generation,
             C: this.state.metrics.C,
@@ -314,10 +262,9 @@ export class AgentsScenario implements Scenario<AgentConfig> {
             alertRate: this.state.metrics.alertRate
         };
     }
-
-    public getState(): any { return this.state; }
-    public serialize(): string { return JSON.stringify(this.state); }
-    public deserialize(json: string) { this.state = JSON.parse(json); }
-    public getEvents() { return [...this.eventQueue]; }
-    public clearEvents() { this.eventQueue = []; }
+    getState() { return this.state; }
+    serialize() { return JSON.stringify(this.state); }
+    deserialize(json) { this.state = JSON.parse(json); }
+    getEvents() { return [...this.eventQueue]; }
+    clearEvents() { this.eventQueue = []; }
 }

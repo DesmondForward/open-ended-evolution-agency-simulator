@@ -10,7 +10,7 @@ When an agent emerges (i.e. the system produces a high-agency entity), it should
 
 Agency Level and Scores: Quantify how agentic the entity is. This can include the peak agency value it achieved or its sustained agency level above the threshold. Since the system’s agency metric combines goal-directedness, adaptability, and influence on the environment
 GitHub
-, the label can reflect those aspects (e.g. “High goal-directed agency (A=0.85) with sustained adaptability”).
+, the label can reflect those aspects (e.g. “High goal-directed agency (A=0.85) with sustained adaptability”). Additionally, estimate the agent's **Cognitive Light Cone**: does it pursue immediate, local goals (small cone) or distant, future-oriented goals (large cone)?
 
 Behavioral Patterns: Describe distinctive behaviors or dynamics observed. For instance, note if the agent’s emergence was accompanied by particular trajectories in Complexity and Diversity (did it arise after a diversity spike? does it maintain complexity?). Any behavior trace traits – e.g. cyclic behavior, rapid adaptation, long-term planning signs – should be captured in the label.
 

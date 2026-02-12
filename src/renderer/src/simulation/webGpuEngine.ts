@@ -67,8 +67,7 @@ fn sigmoid(x: f32) -> f32 {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let index = global_id.x;
     
-    // DEBUG: Replaced arrayLength check with hardcoded limit to rule out intrinsic failure
-    if (index >= 65536u) {
+    if (index >= arrayLength(&oldState)) {
         return;
     }
 
@@ -104,26 +103,77 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Write back
     newState[index] = AgentState(nextC, nextD, nextA, nextAlertRate);
     
-    // DEBUG PROBE: Force D to 0.777 to verify execution
-    newState[index].D = 0.777; 
+}
+`;
+
+const REDUCE_SHADER = `
+struct AgentState {
+    C: f32,
+    D: f32,
+    A: f32,
+    alertRate: f32,
+};
+
+@group(0) @binding(0) var<storage, read> state: array<AgentState>;
+@group(0) @binding(1) var<storage, read_write> partialSums: array<vec4<f32>>;
+
+var<workgroup> shared: array<vec4<f32>, 64>;
+
+@compute @workgroup_size(64)
+fn main(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    let index = global_id.x;
+    if (index >= arrayLength(&state)) {
+        if (local_id.x == 0u) {
+            partialSums[workgroup_id.x] = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+        }
+        return;
+    }
+
+    let current = state[index];
+    shared[local_id.x] = vec4<f32>(current.C, current.D, current.A, current.alertRate);
+    workgroupBarrier();
+
+    var stride = 32u;
+    loop {
+        if (stride == 0u) { break; }
+        if (local_id.x < stride) {
+            shared[local_id.x] = shared[local_id.x] + shared[local_id.x + stride];
+        }
+        workgroupBarrier();
+        stride = stride / 2u;
+    }
+
+    if (local_id.x == 0u) {
+        partialSums[workgroup_id.x] = shared[0];
+    }
 }
 `;
 
 export class WebGpuEngine {
     private device: GPUDevice | null = null;
     private pipeline: GPUComputePipeline | null = null;
+    private reducePipeline: GPUComputePipeline | null = null;
     private bindGroup: GPUBindGroup | null = null;
 
     private paramBuffer: GPUBuffer | null = null;
     private stateBufferA: GPUBuffer | null = null; // Ping
     private stateBufferB: GPUBuffer | null = null; // Pong
-    private resultBuffer: GPUBuffer | null = null; // For readback
+    private partialSumBuffer: GPUBuffer | null = null; // For GPU aggregation
+    private partialReadbackBuffer: GPUBuffer | null = null; // For readback
 
     private numAgents: number = 65536; // 65k agents
+    private numWorkgroups: number = 1024; // 65536 / 64
     private initialized: boolean = false;
 
     // We toggle between ping-pong buffers
     private stepCount: number = 0;
+    private readbackInterval: number = 5;
+    private forceReadback: boolean = false;
+    private lastAggregates: SimulationState | null = null;
 
     constructor() { }
 
@@ -162,6 +212,18 @@ export class WebGpuEngine {
                 layout: 'auto',
                 compute: {
                     module: shaderModule,
+                    entryPoint: 'main'
+                }
+            });
+
+            const reduceModule = this.device.createShaderModule({
+                code: REDUCE_SHADER
+            });
+
+            this.reducePipeline = this.device.createComputePipeline({
+                layout: 'auto',
+                compute: {
+                    module: reduceModule,
                     entryPoint: 'main'
                 }
             });
@@ -205,13 +267,20 @@ export class WebGpuEngine {
             });
 
             // Result buffer for reading back to CPU
-            this.resultBuffer = this.device.createBuffer({
-                size: stateBufferSize,
+            this.numWorkgroups = Math.ceil(this.numAgents / 64);
+            const partialSize = this.numWorkgroups * 16;
+            this.partialSumBuffer = this.device.createBuffer({
+                size: partialSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+            });
+            this.partialReadbackBuffer = this.device.createBuffer({
+                size: partialSize,
                 usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
             });
 
             this.initialized = true;
             this.stepCount = 0;
+            this.lastAggregates = null;
             console.log("WebGPU Engine Initialized Successfully");
             return true;
         } catch (e) {
@@ -225,7 +294,7 @@ export class WebGpuEngine {
         control: ControlSignal,
         lastState: SimulationState // Used for generation tracking, actual state is on GPU
     ): Promise<SimulationState> {
-        if (!this.device || !this.pipeline || !this.paramBuffer || !this.stateBufferA || !this.stateBufferB || !this.resultBuffer) {
+        if (!this.device || !this.pipeline || !this.reducePipeline || !this.paramBuffer || !this.stateBufferA || !this.stateBufferB || !this.partialSumBuffer || !this.partialReadbackBuffer) {
             throw new Error("WebGPU not initialized");
         }
 
@@ -270,12 +339,28 @@ export class WebGpuEngine {
         passEncoder.setPipeline(this.pipeline);
         passEncoder.setBindGroup(0, bindGroup);
         // Workgroup size 64. Total agents 65536. Dispatch 1024 groups.
-        passEncoder.dispatchWorkgroups(this.numAgents / 64);
+        passEncoder.dispatchWorkgroups(this.numWorkgroups);
         passEncoder.end();
 
-        // 4. Copy result to readback buffer (optional, maybe not every frame if too slow?)
-        // For now, we do it every frame to keep logic simple
-        commandEncoder.copyBufferToBuffer(destBuffer, 0, this.resultBuffer, 0, this.numAgents * 16);
+        // 4. Reduce on GPU to partial sums
+        const reduceBindGroup = this.device.createBindGroup({
+            layout: this.reducePipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: destBuffer } },
+                { binding: 1, resource: { buffer: this.partialSumBuffer } }
+            ]
+        });
+
+        const reducePass = commandEncoder.beginComputePass();
+        reducePass.setPipeline(this.reducePipeline);
+        reducePass.setBindGroup(0, reduceBindGroup);
+        reducePass.dispatchWorkgroups(this.numWorkgroups);
+        reducePass.end();
+
+        const shouldReadback = this.forceReadback || this.stepCount % this.readbackInterval === 0 || !this.lastAggregates;
+        if (shouldReadback) {
+            commandEncoder.copyBufferToBuffer(this.partialSumBuffer, 0, this.partialReadbackBuffer, 0, this.numWorkgroups * 16);
+        }
 
         this.device.queue.submit([commandEncoder.finish()]);
 
@@ -284,41 +369,48 @@ export class WebGpuEngine {
             console.error("[WebGPU] Step Validation Error:", validationError.message);
         }
 
-        // 5. Read back
-        await this.resultBuffer.mapAsync(GPUMapMode.READ);
-        const arrayBuffer = this.resultBuffer.getMappedRange();
-        const data = new Float32Array(arrayBuffer);
+        let nextState: SimulationState;
+        if (shouldReadback) {
+            await this.partialReadbackBuffer.mapAsync(GPUMapMode.READ);
+            const arrayBuffer = this.partialReadbackBuffer.getMappedRange();
+            const data = new Float32Array(arrayBuffer);
 
-        // DEBUG: Logging to verify data integrity
-        if (this.stepCount % 100 === 0) {
-            console.log(`[WebGPU] Step ${this.stepCount} Readback - Agent 0 D: ${data[1]}`);
+            let sumC = 0, sumD = 0, sumA = 0, sumAlert = 0;
+            for (let i = 0; i < this.numWorkgroups; i++) {
+                sumC += data[i * 4 + 0];
+                sumD += data[i * 4 + 1];
+                sumA += data[i * 4 + 2];
+                sumAlert += data[i * 4 + 3];
+            }
+
+            const meanC = sumC / this.numAgents;
+            const meanD = sumD / this.numAgents;
+            const meanA = sumA / this.numAgents;
+            const meanAlert = sumAlert / this.numAgents;
+
+            this.partialReadbackBuffer.unmap();
+            this.forceReadback = false;
+
+            nextState = {
+                C: meanC,
+                D: meanD,
+                A: meanA,
+                alertRate: meanAlert,
+                generation: lastState.generation + currentParams.dt
+            };
+        } else {
+            nextState = {
+                ...(this.lastAggregates || lastState),
+                generation: lastState.generation + currentParams.dt
+            };
         }
 
-        // 6. Aggregate results (compute mean)
-        let sumC = 0, sumD = 0, sumA = 0, sumAlert = 0;
-        // Optimization: Don't iterate all 65k in JS main thread if not needed, but JS is fast enough for this.
-        // It's just a simple loop.
-        for (let i = 0; i < this.numAgents; i++) {
-            sumC += data[i * 4 + 0];
-            sumD += data[i * 4 + 1];
-            sumA += data[i * 4 + 2];
-            sumAlert += data[i * 4 + 3];
-        }
-
-        const meanC = sumC / this.numAgents;
-        const meanD = sumD / this.numAgents;
-        const meanA = sumA / this.numAgents;
-        const meanAlert = sumAlert / this.numAgents;
-
-        this.resultBuffer.unmap();
+        this.lastAggregates = nextState;
         this.stepCount++;
+        return nextState;
+    }
 
-        return {
-            C: meanC,
-            D: meanD,
-            A: meanA,
-            alertRate: meanAlert,
-            generation: lastState.generation + currentParams.dt
-        };
+    requestReadback(): void {
+        this.forceReadback = true;
     }
 }

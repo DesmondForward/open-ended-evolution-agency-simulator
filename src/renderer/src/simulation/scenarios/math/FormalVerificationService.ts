@@ -188,7 +188,7 @@ export class FormalVerificationService {
 
         return {
             name: `theorem_${claim.id.replace(/[^a-zA-Z0-9]/g, '_')}`,
-            statement: `∀ x y : ℝ, ${lhs} = ${rhs}`,
+            statement: `forall x y : Real, ${lhs} = ${rhs}`,
             proof: 'by ring'
         };
     }
@@ -233,7 +233,7 @@ export class FormalVerificationService {
 import Mathlib.Algebra.Ring.Basic
 import Mathlib.Tactic
 
-${theorem.name} : ${theorem.statement} := ${theorem.proof}
+theorem ${theorem.name} : ${theorem.statement} := ${theorem.proof}
 `.trim();
     }
 

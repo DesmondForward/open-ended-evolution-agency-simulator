@@ -3,7 +3,7 @@ import { useSimulationStore } from '../store/simulationStore';
 import { Brain, Zap, MessageSquare } from 'lucide-react';
 
 export const AIControlPanel: React.FC = () => {
-    const { isAIControlled, toggleAIControl, aiReasoning, aiStatus, lastAiUpdate, triggerAI } = useSimulationStore();
+    const { isAIControlled, toggleAIControl, aiReasoning, aiStatus, lastAiUpdate, triggerAI, aiError } = useSimulationStore();
 
     return (
         <div className="card" style={{ padding: '16px' }}>
@@ -115,9 +115,26 @@ export const AIControlPanel: React.FC = () => {
                                 onMouseEnter={(e) => { if (aiStatus !== 'thinking') e.currentTarget.style.borderColor = 'var(--color-agency)' }}
                                 onMouseLeave={(e) => { if (aiStatus !== 'thinking') e.currentTarget.style.borderColor = 'var(--color-border)' }}
                             >
+
                                 Force Analysis
                             </button>
                         </div>
+
+                        {/* Error Message */}
+                        {aiError && (
+                            <div style={{
+                                padding: '8px',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid var(--color-danger)',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                color: 'var(--color-danger)',
+                                marginTop: '4px'
+                            }}>
+                                <strong>Error:</strong> {aiError}
+                            </div>
+                        )}
+
                     </div>
                 ) : (
                     <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--color-text-secondary)' }}>

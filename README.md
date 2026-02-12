@@ -8,13 +8,15 @@ A specialized research tool for simulating and detecting emergent agency in open
 
 The simulator explores the hypothesis that **Agency** ($A$) emerges as a product of **Complexity** ($C$) and **Diversity** ($D$) under the pressure of **Environmental Difficulty** ($U$). v2.0 expands beyond the original stochastic differential equations (SDEs) to include agent-based "Grand Challenge" domains where agency can be observed and measured in concrete tasks.
 
+> This project is conceptually aligned with **Michael Levin's "Kinds of Minds"** framework. It models the **Cognitive Light Cone**—the spatial and temporal horizon of goals an agent can pursue—and serves as a computational testbed for **TAME** (Technological Approach to Mind Everywhere), treating intelligence as a continuum from basal cognition to complex problem-solving.
+
 ### Core Scenarios
 
-#### 1. Mathematical Challenge Arena (SOTA)
+#### 1. Math Challenge Arena (SOTA)
 *   **Focus**: Neuro-symbolic evolution of agents resolving open-ended mathematical conjectures.
 *   **Mechanism**:
     *   **AST Genomes**: Agents possess evolved abstract syntax trees representing solution strategies.
-    *   **Neuro-Symbolic Architecture**: Hybdrid system using specialized neural guides for proof search.
+    *   **Neuro-Symbolic Architecture**: Hybrid system using specialized neural guides for proof search.
     *   **Formal Verification**: Integration with **Lean 4 / Coq** (via `FormalVerificationService`) to rigorously validate generated theorems.
     *   **LLM Mutation**: Uses **GPT/LLMs** as an intelligent mutation operator to generate semantically valid and novel mathematical variants.
 
@@ -99,7 +101,7 @@ When the system successfully crosses the **Agency Threshold ($A > 0.75$)**, the 
 
 6.  Build for production:
     ```bash
-    npm run build
+    npm run electron:build
     ```
 
 ---
@@ -123,7 +125,7 @@ When the system successfully crosses the **Agency Threshold ($A > 0.75$)**, the 
 │       │   │   │   ├── alignment/ # Safety Sandbox
 │       │   │   │   ├── bio/       # Xenobiology
 │       │   │   │   └── sde/       # Classic Differential Eq Engine
-│       │   │   ├── runners/   # Loop Orchestration
+│       │   │   ├── runner/    # Loop Orchestration
 │       │   │   └── types.ts   # Shared Types & interfaces
 │       │   ├── store/         # Zustand State Management
 │       │   └── App.tsx
@@ -131,6 +133,8 @@ When the system successfully crosses the **Agency Threshold ($A > 0.75$)**, the 
 ├── electron.vite.config.ts    # Vite configuration
 └── package.json
 ```
+
+---
 
 ## 💾 Data Storage
 
@@ -148,7 +152,31 @@ The application persists data to your operating system's user data directory.
 
 ## 🎛 Configuration
 
-Key simulation parameters (alpha, decays, coupling rates) can be tuned in `src/renderer/src/simulation/types.ts` or dynamically adjusted by the AI Researcher during runs.
+Key simulation parameters are defined in `src/renderer/src/simulation/types.ts`. These control the coupling rates between Complexity (C), Diversity (D), and Agency (A), as well as the noise levels and decay constants. They can also be dynamically adjusted by the AI Researcher during runs.
+
+### Default Parameters
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| **Coupling Rates** | | |
+| `k_CD` | `0.12` | Rate at which Diversity drives Complexity growth. |
+| `k_AC` | `0.10` | Rate at which Complexity drives Agency growth. |
+| `k_DU` | `0.35` | Rate at which Difficulty ($U$) reduces Diversity (selection pressure). |
+| `k_U` | `0.08` | Rate at which Difficulty ($U$) stimulates Complexity/Agency. |
+| `k_AU` | `0.4` | Additional coupling: Difficulty ($U$) driving Agency directly. |
+| **Decay & Growth** | | |
+| `k_C_decay` | `0.3` | Natural decay rate of Complexity. |
+| `k_D_growth` | `0.25` | Intrinsic growth rate of Diversity. |
+| `k_D_decay` | `0.15` | Decay rate of Diversity (saturation/competition). |
+| `k_A_decay` | `0.35` | Natural decay rate of Agency. |
+| **Stochasticity** | | |
+| `sigma_C` | `0.005` | Noise scale for Complexity dynamics. |
+| `sigma_D` | `0.02` | Noise scale for Diversity dynamics. |
+| `sigma_A` | `0.005` | Noise scale for Agency dynamics. |
+| **System** | | |
+| `A_alert` | `0.75` | Threshold for triggering Agency Emergence analysis (Xenobiologist). |
+| `tau` | `5` | Time constant for the alert rate signal. |
+| `useGPU` | `false` | Enable experimental WebGPU acceleration (Ensemble Mode). |
 
 ---
 

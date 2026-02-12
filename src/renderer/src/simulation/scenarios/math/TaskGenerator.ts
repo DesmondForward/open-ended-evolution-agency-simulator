@@ -12,7 +12,7 @@ export class MathTaskGenerator {
      * Generate a math task based on difficulty.
      * Auto-curriculum progression:
      * - 0.0 - 0.5: Linear equations (ax + b = c)
-     * - 0.5 - 1.0: Quadratic equations (ax² + bx + c = 0)
+     * - 0.5 - 1.0: Quadratic equations (ax^2 + bx + c = 0)
      */
     public generate(difficulty: number): MathTask {
         // Determine task type based on difficulty threshold
@@ -45,7 +45,7 @@ export class MathTaskGenerator {
     }
 
     /**
-     * Generate quadratic equation: ax² + bx + c = 0
+     * Generate quadratic equation: ax^2 + bx + c = 0
      * Uses integer roots for solvability: (x - r1)(x - r2) = 0
      */
     private generateQuadratic(difficulty: number): MathTask {
@@ -57,15 +57,15 @@ export class MathTaskGenerator {
         const r1 = this.prng.nextInt(-maxRoot, maxRoot);
         const r2 = this.prng.nextInt(-maxRoot, maxRoot);
 
-        // Expand (x - r1)(x - r2) = x² - (r1+r2)x + r1*r2
+        // Expand (x - r1)(x - r2) = x^2 - (r1+r2)x + r1*r2
         const a = 1; // Keep leading coefficient 1 for simplicity
         const b = -(r1 + r2);
         const c = r1 * r2;
 
-        // Statement: x² + bx + c = 0 (or x² - bx + c depending on sign)
+        // Statement: x^2 + bx + c = 0 (or x^2 - bx + c depending on sign)
         const bSign = b >= 0 ? '+' : '-';
         const cSign = c >= 0 ? '+' : '-';
-        const statement = `x² ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`;
+        const statement = `x^2 ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`;
 
         return {
             id: `task-${Date.now()}-${this.prng.nextInt(0, 1000)}`,

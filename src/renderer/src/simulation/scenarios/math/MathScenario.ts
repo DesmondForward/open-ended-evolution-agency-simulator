@@ -83,7 +83,16 @@ export class MathScenario implements Scenario<MathConfig> {
     }
 
     public updateConfig(config: Partial<MathConfig>) {
-        this.config = { ...this.config, ...config };
+        const next = { ...this.config, ...config };
+        if (!Number.isFinite(next.populationSize) || next.populationSize < 1) {
+            next.populationSize = 1;
+        }
+        if (!Number.isFinite(next.tasksPerGen) || next.tasksPerGen < 1) {
+            next.tasksPerGen = 1;
+        }
+        next.populationSize = Math.floor(next.populationSize);
+        next.tasksPerGen = Math.floor(next.tasksPerGen);
+        this.config = next;
     }
 
     public step(control: ControlSignal) {
@@ -189,14 +198,41 @@ export class MathScenario implements Scenario<MathConfig> {
                     // We'll treat it as a promise but since we are in a sync loop we might miss it this tick
                     // For this implementation we will force a sync-like behavior or just let it handle in background
 
+                    const verificationGeneration = this.state.generation;
                     verifier.verify(target).then(result => {
                         if (result.verified) {
                             target.proven = true;
-                            // Update score retrospectively or just reward implicitly by it being in the pool
+
+                            // DISCOVERY: Find the author and credit them
+                            const author = this.state.agents.find(a => a.id === target.authorId);
+                            if (author) {
+                                author.theoremsProven++;
+                                author.complexityScore += 0.5; // Persistent boost
+
+                                // Agent Discovered!
+                                this.eventQueue.push({
+                                    type: 'agent_emerged',
+                                    timestamp: verificationGeneration,
+                                    data: {
+                                        id: author.id,
+                                        timestamp: new Date().toISOString(),
+                                        name: `Math-Agent-${author.id.substring(0, 5)}`,
+                                        description: `Formal Proof Verified (Backend: ${result.backend}) for: ${target.text}`,
+                                        tags: ['Math-Agent', 'Prover', 'Formal-Verification'],
+                                        generation: verificationGeneration,
+                                        metrics: { ...this.state.metrics },
+                                        parameters: { ...this.config, genome: author }, // Serialize the genome
+                                        environmentalControl: { U: this.state.metrics.U },
+                                        runContext: { bestAgencySoFar: this.state.metrics.A }
+                                    },
+                                    message: `Agent ${author.id.substring(0, 5)} formally proved a theorem!`
+                                });
+                            }
+
                             this.eventQueue.push({
                                 type: 'task_solved',
-                                timestamp: this.state.generation,
-                                data: { claim: target.text, agent: agent.genome.id, backend: result.backend },
+                                timestamp: verificationGeneration,
+                                data: { claim: target.text, agent: target.authorId, backend: result.backend },
                                 message: `THEOREM PROVEN (${result.backend}): ${target.text}`
                             });
                         }
@@ -208,6 +244,38 @@ export class MathScenario implements Scenario<MathConfig> {
                         // We give immediate credit for "finding a proof path"
                         score += 10.0;
                         proofsFoundThisGen++;
+
+                        // Log this agent as it found a proof!
+                        this.eventQueue.push({
+                            type: 'agent_emerged',
+                            timestamp: this.state.generation,
+                            data: {
+                                id: agent.genome.id,
+                                timestamp: new Date().toISOString(),
+                                name: `Math-Agent-${agent.genome.id.substring(0, 5)}`,
+                                description: `Math Agent found proof for: ${target.text.substring(0, 30)}...`,
+                                tags: ['Math-Agent', 'Prover'],
+                                generation: this.state.generation,
+                                metrics: {
+                                    A: this.state.metrics.A,
+                                    C: this.state.metrics.C,
+                                    D: this.state.metrics.D,
+                                    alertRate: this.state.metrics.alertRate
+                                },
+                                parameters: { ...this.config, genome: agent.genome },
+                                environmentalControl: { U: this.state.metrics.U },
+                                historySnippet: [],
+                                validationMetrics: {
+                                    stateBoundsViolationRate: 0,
+                                    diversityFloorViolationFraction: 0,
+                                    controlBoundsViolationRate: 0
+                                },
+                                runContext: {
+                                    bestAgencySoFar: this.state.metrics.A
+                                }
+                            },
+                            message: "Agent Proved Theorem - Added to Library"
+                        });
                     }
                 }
             }
@@ -218,11 +286,19 @@ export class MathScenario implements Scenario<MathConfig> {
         // 3. Selection & Reproduction (Simple Elitism)
         scores.sort((a, b) => b.score - a.score);
 
-        const eliteCount = Math.floor(this.config.populationSize * 0.2);
-        const elites = scores.slice(0, eliteCount).map(s => s.agent);
+        const eliteCount = Math.max(1, Math.floor(this.config.populationSize * 0.2));
+        const elites = scores.slice(0, Math.min(eliteCount, scores.length)).map(s => s.agent);
 
         const nextGen: any[] = [];
         elites.forEach(e => nextGen.push(e.genome));
+
+        if (elites.length === 0) {
+            for (let i = 0; i < this.config.populationSize; i++) {
+                nextGen.push(MathAgent.random(this.prng, true).genome);
+            }
+            this.state.agents = nextGen;
+            return;
+        }
 
         // Async Mutation Handling (LLM)
         // Since step() is synchronous, we'll do best-effort sync mutation here
@@ -307,7 +383,7 @@ export class MathScenario implements Scenario<MathConfig> {
                     type: 'custom',
                     timestamp: this.state.generation,
                     data: { dA, A: this.state.metrics.A },
-                    message: '⚠️ CRITICAL SATURATION DETECTED: TRIGGERING MASS EXTINCTION'
+                    message: 'CRITICAL SATURATION DETECTED: TRIGGERING MASS EXTINCTION'
                 });
             }
         }

@@ -59,13 +59,13 @@ export class MathAgent {
         const effectiveAccuracy = accuracyProbability * Math.max(0.1, (1 - task.difficulty));
 
         if (prng.next() < effectiveAccuracy && task.coefficients) {
-            // Linear equation: ax + b = c → x = (c - b) / a
+            // Linear equation: ax + b = c -> x = (c - b) / a
             if (task.type === 'algebra_linear' && task.coefficients.length >= 3) {
                 const [a, b, c] = task.coefficients;
                 if (a !== 0) return (c - b) / a;
             }
 
-            // Quadratic equation: ax² + bx + c = 0 (roots stored in coefficients)
+            // Quadratic equation: ax^2 + bx + c = 0 (roots stored in coefficients)
             if (task.type === 'algebra_quadratic' && task.coefficients.length >= 5) {
                 const [a, b, c, r1, r2] = task.coefficients;
                 return complexityWeight > 0.5 ? r1 : r2;
@@ -114,6 +114,7 @@ export class MathAgent {
 
         const claim: MathClaim = {
             id: `claim-${prng.nextInt(0, 100000)}`,
+            authorId: this.genome.id,
             expression: {
                 type: 'OP',
                 op: 'EQ',

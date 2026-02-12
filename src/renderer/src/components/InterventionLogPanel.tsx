@@ -3,7 +3,7 @@ import { useSimulationStore } from '../store/simulationStore';
 import { Activity } from 'lucide-react';
 
 const InterventionLogPanel: React.FC = () => {
-    const { interventionLog } = useSimulationStore();
+    const { interventionLog, logPersistenceError } = useSimulationStore();
 
     // Reverse log to show newest first
     const displayLog = [...interventionLog].reverse();
@@ -21,6 +21,18 @@ const InterventionLogPanel: React.FC = () => {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {logPersistenceError && (
+                    <div style={{
+                        padding: '8px',
+                        background: 'rgba(244, 63, 94, 0.12)',
+                        border: '1px solid rgba(244, 63, 94, 0.35)',
+                        borderRadius: '4px',
+                        color: '#f87171',
+                        fontSize: '0.8rem'
+                    }}>
+                        AI log persistence failed: {logPersistenceError}
+                    </div>
+                )}
                 {displayLog.length === 0 ? (
                     <div style={{ color: 'var(--color-text-secondary)', fontStyle: 'italic', fontSize: '0.9rem' }}>
                         No interventions recorded.

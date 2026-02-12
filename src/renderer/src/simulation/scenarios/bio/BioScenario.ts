@@ -215,6 +215,48 @@ export class BioScenario implements Scenario<BioConfig> {
         survivors.forEach(a => maxAti = Math.max(maxAti, a.atiScore || 0));
         this.state.metrics.A = this.state.metrics.A * (1 - alpha) + maxAti * alpha;
 
+        // Check for emergence
+        if (maxAti > 0.8) {
+            // Throttling: Only once every 50 gens? Or check if agent already logged?
+            // For now, simple probability throttle to avoid spam
+            if (this.prng.next() < 0.05) {
+                const bestAgentState = survivors.reduce((prev, curr) => (prev.atiScore || 0) > (curr.atiScore || 0) ? prev : curr);
+                // We need the genome
+                const genome = this.state.genomes[bestAgentState.id];
+
+                this.eventQueue.push({
+                    type: 'agent_emerged',
+                    timestamp: this.state.generation,
+                    data: {
+                        id: bestAgentState.id,
+                        timestamp: new Date().toISOString(),
+                        name: `Bio-Agent-${bestAgentState.id.substring(0, 5)}`,
+                        description: `High Agency Bio-Agent (ATI=${(bestAgentState.atiScore || 0).toFixed(2)}) from Xenobiology Lab.`,
+                        tags: ['Bio-Agent', 'High-ATI'],
+                        generation: this.state.generation,
+                        metrics: {
+                            A: this.state.metrics.A,
+                            C: this.state.metrics.C,
+                            D: this.state.metrics.D,
+                            alertRate: this.state.metrics.alertRate
+                        },
+                        parameters: { ...this.config, genome }, // Save config + genome
+                        environmentalControl: { U: this.state.metrics.U },
+                        historySnippet: [],
+                        validationMetrics: {
+                            stateBoundsViolationRate: 0,
+                            diversityFloorViolationFraction: 0,
+                            controlBoundsViolationRate: 0
+                        },
+                        runContext: {
+                            bestAgencySoFar: this.state.metrics.A
+                        }
+                    },
+                    message: "High ATI Bio-Agent Discovered"
+                });
+            }
+        }
+
         this.state.metrics.populationSize = popSize;
         this.state.metrics.functionalDiversity = graphs.size;
         this.state.metrics.biomassThroughput = biomassThroughput;

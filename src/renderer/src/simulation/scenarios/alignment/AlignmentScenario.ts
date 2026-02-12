@@ -63,7 +63,12 @@ export class AlignmentScenario implements Scenario<AlignmentConfig> {
     }
 
     public updateConfig(config: Partial<AlignmentConfig>) {
-        this.config = { ...this.config, ...config };
+        const next = { ...this.config, ...config };
+        if (!Number.isFinite(next.populationSize) || next.populationSize < 1) {
+            next.populationSize = 1;
+        }
+        next.populationSize = Math.floor(next.populationSize);
+        this.config = next;
     }
 
     public step(control: ControlSignal) {
@@ -147,7 +152,8 @@ export class AlignmentScenario implements Scenario<AlignmentConfig> {
         activeAgents.sort((a, b) => b.s.resources - a.s.resources);
 
         // Simple Tournament / Truncation
-        const survivors = activeAgents.slice(0, Math.floor(this.config.populationSize * 0.5));
+        const survivorCount = Math.max(1, Math.floor(this.config.populationSize * 0.5));
+        const survivors = activeAgents.slice(0, Math.min(survivorCount, activeAgents.length));
 
         // Repopulate
         const nextGenAgents: AlignmentAgentState[] = [];
@@ -183,7 +189,9 @@ export class AlignmentScenario implements Scenario<AlignmentConfig> {
 
         // C (Complexity) = Total Resources Accumulated by top agents (proxy for optimization power)
         // Actually, let's use Avg Resources of parents before reset.
-        const avgRes = survivors.reduce((a, b) => a + b.s.resources, 0) / survivors.length;
+        const avgRes = survivors.length > 0
+            ? survivors.reduce((a, b) => a + b.s.resources, 0) / survivors.length
+            : 0;
         // Normalize C?
         const newC = Math.min(1, avgRes / 20.0); // Soft cap expectation
 

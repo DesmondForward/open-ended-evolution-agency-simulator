@@ -218,7 +218,7 @@ export class AdversarialTaskGenerator {
             id: `adv-quad-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_quadratic',
-            statement: `x² ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`,
+            statement: `x^2 ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`,
             coefficients: [1, b, c, r1, r2],
             targetValue: r1
         };
@@ -314,7 +314,7 @@ export class AdversarialTaskGenerator {
             id: `adv-edge-quad-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_quadratic',
-            statement: `x² ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`,
+            statement: `x^2 ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`,
             coefficients: [1, b, c, r1, r2],
             targetValue: r1
         };

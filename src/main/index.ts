@@ -2,6 +2,16 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import * as fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { appendAiLogEntry } from './storage/aiLogStorage'
+import { deleteAgentFromLibrary, getAgentsFromLibrary, saveAgentToLibrary } from './storage/agentLibraryStorage'
+import {
+    validateAiControlRequestPayload,
+    validateAiDescriptionRequestPayload,
+    validateAiLogPayload,
+    validateDeleteAgentPayload,
+    validateSaveAgentPayload
+} from '../shared/ipcValidation'
+import { requestAiControl, requestAgentDescription } from './aiService'
 
 function createWindow(): void {
     const mainWindow = new BrowserWindow({
@@ -37,43 +47,24 @@ function createWindow(): void {
 
 // IPC Handler for AI Logging
 ipcMain.handle('log-ai-action', async (_, data) => {
-    try {
-        const userDataPath = app.getPath('userData')
-        const logsDir = join(userDataPath, 'logs')
-        const logFile = join(logsDir, 'ai_log.csv')
-
-        // Ensure directory exists
-        if (!fs.existsSync(logsDir)) {
-            fs.mkdirSync(logsDir, { recursive: true })
-        }
-
-        // Create header if file doesn't exist
-        if (!fs.existsSync(logFile)) {
-            const header = 'Timestamp,Generation,Action,U,Parameters,Reasoning,Agency,BestAgency\n'
-            fs.writeFileSync(logFile, header, 'utf8')
-        }
-
-        // Format CSV row (handling commas in reasoning by quoting)
-        const timestamp = new Date().toISOString()
-        // Escape quotes in strings
-        const safeReasoning = `"${(data.reasoning || '').replace(/"/g, '""')}"`
-        const safeAction = `"${(data.action || '').replace(/"/g, '""')}"`
-        const safeParams = `"${(JSON.stringify(data.params || {})).replace(/"/g, '""')}"`
-
-        const row = `${timestamp},${data.generation},${safeAction},${data.u},${safeParams},${safeReasoning},${data.agency},${data.bestAgency}\n`
-
-        fs.appendFileSync(logFile, row, 'utf8')
-        return { success: true, path: logFile }
-    } catch (error) {
-        console.error('Failed to log AI action:', error)
-        return { success: false, error: String(error) }
+    if (!validateAiLogPayload(data)) {
+        return { success: false, error: 'Invalid payload for AI log.' }
     }
+    const userDataPath = app.getPath('userData')
+    const result = appendAiLogEntry(userDataPath, data)
+    if (!result.success) {
+        console.error('Failed to log AI action:', result.error)
+    }
+    return result
 })
 
 // IPC Handler to Open Logs Folder
 ipcMain.handle('open-logs-folder', async () => {
     const userDataPath = app.getPath('userData')
     const logsDir = join(userDataPath, 'logs')
+    if (!logsDir) {
+        return { success: false, error: 'User data path not available.' }
+    }
     if (!fs.existsSync(logsDir)) {
         fs.mkdirSync(logsDir, { recursive: true })
     }
@@ -84,74 +75,63 @@ ipcMain.handle('open-logs-folder', async () => {
 // --- Agent Library IPC Handlers ---
 
 ipcMain.handle('save-agent', async (_, agentData) => {
-    try {
-        const userDataPath = app.getPath('userData')
-        const libraryDir = join(userDataPath, 'library', 'agents')
-
-        // Ensure directory exists
-        if (!fs.existsSync(libraryDir)) {
-            fs.mkdirSync(libraryDir, { recursive: true })
-        }
-
-        const safeId = agentData.id.replace(/[^a-z0-9-]/gi, '_')
-        const filename = `agent_${safeId}.json`
-        const filePath = join(libraryDir, filename)
-
-        fs.writeFileSync(filePath, JSON.stringify(agentData, null, 2), 'utf8')
-        return { success: true, path: filePath }
-    } catch (error) {
-        console.error('Failed to save agent:', error)
-        return { success: false, error: String(error) }
+    if (!validateSaveAgentPayload(agentData)) {
+        return { success: false, error: 'Invalid agent payload.' }
     }
+    const userDataPath = app.getPath('userData')
+    const result = saveAgentToLibrary(userDataPath, agentData as unknown as Record<string, unknown>)
+    if (!result.success) {
+        console.error('Failed to save agent:', result.error)
+    }
+    return result
 })
 
 ipcMain.handle('get-agents', async () => {
-    try {
-        const userDataPath = app.getPath('userData')
-        const libraryDir = join(userDataPath, 'library', 'agents')
-
-        if (!fs.existsSync(libraryDir)) {
-            return []
-        }
-
-        const files = fs.readdirSync(libraryDir).filter(f => f.endsWith('.json'))
-        const agents = files.map(file => {
-            try {
-                const content = fs.readFileSync(join(libraryDir, file), 'utf8')
-                return JSON.parse(content)
-            } catch (e) {
-                console.error(`Failed to read agent file ${file}:`, e)
-                return null
-            }
-        }).filter(a => a !== null)
-
-        // Sort by timestamp descending
-        agents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-        return agents
-    } catch (error) {
-        console.error('Failed to get agents:', error)
-        return []
-    }
+    const userDataPath = app.getPath('userData')
+    return getAgentsFromLibrary(userDataPath)
 })
 
 ipcMain.handle('delete-agent', async (_, id) => {
-    try {
-        const userDataPath = app.getPath('userData')
-        const libraryDir = join(userDataPath, 'library', 'agents')
-        const safeId = id.replace(/[^a-z0-9-]/gi, '_')
-        const filename = `agent_${safeId}.json`
-        const filePath = join(libraryDir, filename)
-
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath)
-            return { success: true }
-        }
-        return { success: false, error: 'File not found' }
-    } catch (error) {
-        return { success: false, error: String(error) }
+    if (!validateDeleteAgentPayload({ id })) {
+        return { success: false, error: 'Invalid agent id.' }
     }
+    const userDataPath = app.getPath('userData')
+    return deleteAgentFromLibrary(userDataPath, id)
 })
+
+let aiQueue: Promise<void> = Promise.resolve();
+const enqueueAi = async <T>(task: () => Promise<T>): Promise<T> => {
+    const run = aiQueue.then(task, task);
+    aiQueue = run.then(() => undefined, () => undefined);
+    return run;
+};
+
+ipcMain.handle('ai-control-request', async (_, payload) => {
+    if (!validateAiControlRequestPayload(payload)) {
+        return { success: false, error: 'Invalid AI control payload.' }
+    }
+    try {
+        const result = await enqueueAi(() => requestAiControl(payload));
+        if (!result) {
+            // This case might be unreachable now if requestAiControl always throws or returns non-null, but keeping for safety
+            return { success: false, error: 'AI control request failed silently.' }
+        }
+        return { success: true, data: result };
+    } catch (error: any) {
+        return { success: false, error: error.message || 'Unknown AI error' };
+    }
+});
+
+ipcMain.handle('ai-agent-description', async (_, payload) => {
+    if (!validateAiDescriptionRequestPayload(payload)) {
+        return { success: false, error: 'Invalid AI description payload.' }
+    }
+    const result = await enqueueAi(() => requestAgentDescription(payload));
+    if (!result) {
+        return { success: false, error: 'AI description request failed.' }
+    }
+    return { success: true, data: result };
+});
 
 app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.evolution.simulator')

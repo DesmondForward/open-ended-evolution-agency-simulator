@@ -135,7 +135,7 @@ const ControlPanel: React.FC = () => {
                     onMouseOver={(e) => e.currentTarget.style.background = 'var(--color-border)'}
                     onMouseOut={(e) => e.currentTarget.style.background = 'var(--color-surface-hover)'}
                 >
-                    <span>↺ Restore Best Parameters</span>
+                    <span>Restore Best Parameters</span>
                 </button>
             )}
 
@@ -162,7 +162,7 @@ const ControlPanel: React.FC = () => {
                     }}
                     title="Open Logs Folder"
                 >
-                    📂 Logs
+                    Logs
                 </button>
                 <button
                     onClick={handleExport}
@@ -180,7 +180,7 @@ const ControlPanel: React.FC = () => {
                     }}
                     title="Save Snapshot"
                 >
-                    💾 Save
+                    Save
                 </button>
                 <button
                     onClick={() => fileInputRef.current?.click()}
@@ -198,7 +198,7 @@ const ControlPanel: React.FC = () => {
                     }}
                     title="Load Snapshot"
                 >
-                    📂 Load
+                    Load
                 </button>
                 <input
                     type="file"

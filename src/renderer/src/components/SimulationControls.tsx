@@ -3,7 +3,7 @@ import { Play, Pause, RotateCcw, Zap, Cpu } from 'lucide-react';
 import { useSimulationStore } from '../store/simulationStore';
 
 const SimulationControls: React.FC = () => {
-    const { isPlaying, togglePlay, reset, currentState, parameters, updateParameters } = useSimulationStore();
+    const { isPlaying, togglePlay, reset, currentState, parameters, updateParameters, scenarioMetadata } = useSimulationStore();
 
     return (
         <div className="card" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
@@ -35,9 +35,13 @@ const SimulationControls: React.FC = () => {
                     onClick={() => updateParameters({ useGPU: !parameters.useGPU })}
                     style={{
                         borderColor: parameters.useGPU ? 'var(--color-accent)' : 'transparent',
-                        color: parameters.useGPU ? 'var(--color-accent)' : 'inherit'
+                        color: parameters.useGPU ? 'var(--color-accent)' : 'inherit',
+                        opacity: scenarioMetadata.type === 'sde' ? 1 : 0.5,
+                        pointerEvents: scenarioMetadata.type === 'sde' ? 'auto' : 'none'
                     }}
-                    title="Toggle Massively Parallel Ensemble Simulation (RTX 5080)"
+                    title={scenarioMetadata.type === 'sde'
+                        ? 'Toggle Massively Parallel Ensemble Simulation (RTX 5080)'
+                        : 'GPU acceleration is available for SDE only.'}
                 >
                     {parameters.useGPU ? <Zap size={18} /> : <Cpu size={18} />}
                     {parameters.useGPU ? "GPU" : "CPU"}

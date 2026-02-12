@@ -35,6 +35,7 @@ export interface MathProof {
 
 export interface MathClaim {
     id: string;
+    authorId: string;
     expression: MathExpression;
     text: string; // Readable form
     noveltyScore: number;

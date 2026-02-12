@@ -23,6 +23,11 @@ import { MathScenario } from '../simulation/scenarios/math/MathScenario';
 import { AlignmentScenario } from '../simulation/scenarios/alignment/AlignmentScenario';
 import { BioScenario } from '../simulation/scenarios/bio/BioScenario';
 import { AgentsScenario } from '../simulation/scenarios/agents/AgentsScenario';
+import { DEFAULT_MATH_CONFIG, MathConfig } from '../simulation/scenarios/math/MathTypes';
+import { DEFAULT_ALIGNMENT_CONFIG, AlignmentConfig } from '../simulation/scenarios/alignment/AlignmentTypes';
+import { DEFAULT_BIO_CONFIG, BioConfig } from '../simulation/scenarios/bio/BioTypes';
+import { DEFAULT_AGENT_CONFIG, AgentConfig } from '../simulation/scenarios/agents/AgentTypes';
+import { createSnapshot, parseSnapshot, SnapshotData } from '../simulation/snapshot';
 
 interface SimulationStore {
     // State
@@ -34,11 +39,18 @@ interface SimulationStore {
     alerts: AlertEvent[];
     events: ScenarioEvent[]; // Global event log
     validationMetrics: ValidationMetrics;
+    logPersistenceError: string | null;
 
     // Scenario Management
     currentScenarioId: string;
     scenarioMetadata: ScenarioMetadata;
     availableScenarios: ScenarioMetadata[];
+    scenarioConfigs: {
+        math: MathConfig;
+        alignment: AlignmentConfig;
+        bio: BioConfig;
+        agents: AgentConfig;
+    };
 
     // Agent Library
     savedAgents: SavedAgent[];
@@ -50,6 +62,7 @@ interface SimulationStore {
     lastAiUpdate: Date | null;
     aiHistory: AIHistoryEntry[];
     interventionLog: InterventionLogEntry[];
+    aiError: string | null;
 
     // Persistence
     bestAgency: number;
@@ -63,6 +76,7 @@ interface SimulationStore {
     reset: () => void;
     setControl: (U: number) => void;
     updateParameters: (params: Partial<SimulationParameters>) => void;
+    updateScenarioConfig: (config: Partial<MathConfig | AlignmentConfig | BioConfig | AgentConfig>) => void;
     switchScenario: (id: string) => void;
     loadBestParameters: () => void;
     triggerAI: () => Promise<void>;
@@ -91,6 +105,59 @@ const scenarios: Record<string, any> = {
     'agents': agentsScenario
 };
 
+const getScenarioConfigForId = (
+    id: string,
+    parameters: SimulationParameters,
+    configs: SimulationStore['scenarioConfigs']
+) => {
+    switch (id) {
+        case 'math':
+            return configs.math;
+        case 'alignment':
+            return configs.alignment;
+        case 'bio':
+            return configs.bio;
+        case 'agents':
+            return configs.agents;
+        case 'sde-v1':
+        default:
+            return parameters;
+    }
+};
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const sanitizeMathConfig = (config: MathConfig): MathConfig => ({
+    populationSize: Math.max(1, Math.floor(config.populationSize)),
+    mutationRate: clamp01(config.mutationRate),
+    tasksPerGen: Math.max(1, Math.floor(config.tasksPerGen)),
+    difficultyScale: Math.max(0, config.difficultyScale),
+    noveltyThreshold: clamp01(config.noveltyThreshold),
+    verificationBudget: Math.max(0, Math.floor(config.verificationBudget)),
+    enableTheorems: config.enableTheorems
+});
+
+const sanitizeAlignmentConfig = (config: AlignmentConfig): AlignmentConfig => ({
+    populationSize: Math.max(1, Math.floor(config.populationSize)),
+    mutationRate: clamp01(config.mutationRate),
+    baseResourceRate: Math.max(0, config.baseResourceRate)
+});
+
+const sanitizeBioConfig = (config: BioConfig): BioConfig => ({
+    initialPopulation: Math.max(1, Math.floor(config.initialPopulation)),
+    maxPopulation: Math.max(1, Math.floor(config.maxPopulation)),
+    mutationRate: clamp01(config.mutationRate),
+    energyPerTick: Math.max(0, config.energyPerTick),
+    mineralInflux: Math.max(0, config.mineralInflux)
+});
+
+const sanitizeAgentConfig = (config: AgentConfig): AgentConfig => ({
+    populationSize: Math.max(1, Math.floor(config.populationSize)),
+    tasksPerGen: Math.max(1, Math.floor(config.tasksPerGen)),
+    baseTaskDifficulty: Math.max(1, config.baseTaskDifficulty),
+    driftRate: clamp01(config.driftRate)
+});
+
 // Initialize Runner
 const runner = new ScenarioRunner({
     onTelemetry: (data) => {
@@ -108,7 +175,20 @@ runner.setTPS(20);
 // Load initial best from localStorage
 const storedBest = localStorage.getItem('fipsm_best_parameters');
 const storedLastGen = localStorage.getItem('fipsm_last_saved_gen');
-const initialBest = storedBest ? JSON.parse(storedBest) : null;
+let initialBest: any = null;
+if (storedBest) {
+    try {
+        initialBest = JSON.parse(storedBest);
+    } catch (error) {
+        console.warn('[SimulationStore] Failed to parse stored best parameters, clearing cache.', error);
+        try {
+            localStorage.removeItem('fipsm_best_parameters');
+        } catch {
+            // Ignore storage errors
+        }
+    }
+}
+const initialLastGen = storedLastGen ? parseInt(storedLastGen) : 0;
 
 export const useSimulationStore = create<SimulationStore & { handleTelemetry: (pt: TelemetryPoint) => void, handleEvent: (evt: any) => void }>((set, get) => ({
     // Initial State
@@ -124,6 +204,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         diversityFloorViolationFraction: 0,
         controlBoundsViolationRate: 0
     },
+    logPersistenceError: null,
 
     currentScenarioId: 'sde-v1',
     scenarioMetadata: sdeScenario.metadata,
@@ -134,6 +215,12 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         bioScenario.metadata,
         agentsScenario.metadata
     ],
+    scenarioConfigs: {
+        math: { ...DEFAULT_MATH_CONFIG },
+        alignment: { ...DEFAULT_ALIGNMENT_CONFIG },
+        bio: { ...DEFAULT_BIO_CONFIG },
+        agents: { ...DEFAULT_AGENT_CONFIG }
+    },
 
     savedAgents: [],
     isAIControlled: true,
@@ -142,12 +229,13 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     lastAiUpdate: null,
     aiHistory: [],
     interventionLog: [],
+    aiError: null,
 
     // Persistence
     bestAgency: initialBest ? initialBest.agency : 0,
     bestParameters: initialBest ? initialBest.parameters : null,
     bestControl: initialBest ? initialBest.control : null,
-    lastSavedGeneration: storedLastGen ? parseInt(storedLastGen) : 0,
+    lastSavedGeneration: Number.isFinite(initialLastGen) ? initialLastGen : 0,
 
     // Actions
     togglePlay: () => {
@@ -165,7 +253,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     reset: () => {
         runner.stop();
         const currentId = get().currentScenarioId;
-        scenarios[currentId].initialize(Date.now(), get().parameters); // Re-init with current params
+        const scenarioConfig = getScenarioConfigForId(currentId, get().parameters, get().scenarioConfigs);
+        scenarios[currentId].initialize(Date.now(), scenarioConfig); // Re-init with scenario config
         runner.setScenario(scenarios[currentId]);
 
         set({
@@ -176,12 +265,14 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             events: [],
             aiReasoning: "",
             aiHistory: [],
+            aiError: null,
         });
     },
 
     setControl: (U: number) => {
         const { control, currentState, interventionLog } = get();
-        const newControl = { ...control, U };
+        const clampedU = Math.max(0, Math.min(1, U));
+        const newControl = { ...control, U: clampedU };
         runner.setControl(newControl);
 
         const logEntry: InterventionLogEntry = {
@@ -189,7 +280,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             timestamp: currentState.generation,
             realtime: new Date(),
             source: 'USER',
-            action: `Set U = ${U.toFixed(2)}`
+            action: `Set U = ${clampedU.toFixed(2)}`
         };
 
         set({ control: newControl, interventionLog: [...interventionLog, logEntry] });
@@ -197,11 +288,10 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
 
     updateParameters: (newParams) => {
         const merged = { ...get().parameters, ...newParams };
-        // If current scenario supports config update, do it
         const currentId = get().currentScenarioId;
         const scenario = scenarios[currentId];
 
-        if (scenario.updateConfig) {
+        if (currentId === 'sde-v1' && scenario.updateConfig) {
             scenario.updateConfig(merged as any);
         }
 
@@ -216,6 +306,38 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         set({ parameters: merged, interventionLog: [...get().interventionLog, logEntry] });
     },
 
+    updateScenarioConfig: (config) => {
+        const currentId = get().currentScenarioId;
+        const scenario = scenarios[currentId];
+        if (!scenario || currentId === 'sde-v1') return;
+
+        let updatedConfigs = { ...get().scenarioConfigs };
+        if (currentId === 'math') {
+            updatedConfigs.math = sanitizeMathConfig({ ...updatedConfigs.math, ...(config as Partial<MathConfig>) });
+        } else if (currentId === 'alignment') {
+            updatedConfigs.alignment = sanitizeAlignmentConfig({ ...updatedConfigs.alignment, ...(config as Partial<AlignmentConfig>) });
+        } else if (currentId === 'bio') {
+            updatedConfigs.bio = sanitizeBioConfig({ ...updatedConfigs.bio, ...(config as Partial<BioConfig>) });
+        } else if (currentId === 'agents') {
+            updatedConfigs.agents = sanitizeAgentConfig({ ...updatedConfigs.agents, ...(config as Partial<AgentConfig>) });
+        }
+
+        if (scenario.updateConfig) {
+            const scenarioConfig = getScenarioConfigForId(currentId, get().parameters, updatedConfigs);
+            scenario.updateConfig(scenarioConfig as any);
+        }
+
+        const logEntry: InterventionLogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: get().currentState.generation,
+            realtime: new Date(),
+            source: 'USER',
+            action: `Updated Scenario Config: ${Object.keys(config as any).join(', ')}`
+        };
+
+        set({ scenarioConfigs: updatedConfigs, interventionLog: [...get().interventionLog, logEntry] });
+    },
+
     switchScenario: (id: string) => {
         if (!scenarios[id]) return;
         runner.stop();
@@ -223,7 +345,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         const scenario = scenarios[id];
         // Re-initialize? Or keep state? Usually switch = fresh start or resume.
         // Let's re-initialize to be safe for now.
-        scenario.initialize(Date.now());
+        const scenarioConfig = getScenarioConfigForId(id, get().parameters, get().scenarioConfigs);
+        scenario.initialize(Date.now(), scenarioConfig);
 
         runner.setScenario(scenario);
 
@@ -255,6 +378,36 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         // For MVP, lets just call the async AI step trigger here occasionally
         get().step(); // Trigger generic step logic (AI, etc)
 
+        const { bestAgency, parameters, control, scenarioMetadata, bestParameters } = get();
+        let bestUpdate: Partial<SimulationStore> | null = null;
+
+        if (point.A > bestAgency) {
+            const newBest = point.A;
+            const newBestParams = scenarioMetadata.type === 'sde' ? { ...parameters } : bestParameters;
+            const newBestControl = { ...control };
+            const newLastGen = Math.floor(point.generation);
+
+            bestUpdate = {
+                bestAgency: newBest,
+                bestParameters: newBestParams,
+                bestControl: newBestControl,
+                lastSavedGeneration: newLastGen
+            };
+
+            if (scenarioMetadata.type === 'sde' && newBestParams) {
+                try {
+                    localStorage.setItem('fipsm_best_parameters', JSON.stringify({
+                        agency: newBest,
+                        parameters: newBestParams,
+                        control: newBestControl
+                    }));
+                    localStorage.setItem('fipsm_last_saved_gen', String(newLastGen));
+                } catch (error) {
+                    console.warn('[SimulationStore] Failed to persist best parameters:', error);
+                }
+            }
+        }
+
         set(state => {
             const newTelemetry = [...state.telemetry, point];
             if (newTelemetry.length > MAX_TELEMETRY_POINTS) newTelemetry.shift();
@@ -267,7 +420,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                     D: point.D,
                     A: point.A,
                     alertRate: point.alertRate
-                }
+                },
+                ...(bestUpdate || {})
             };
         });
     },
@@ -288,6 +442,53 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                     type: 'threshold_crossed'
                 };
                 updates.alerts = [...state.alerts, newAlert];
+            } else if (event.type === 'agent_emerged') {
+                // Determine if we should trigger AI analysis
+                // We use the service wrapper which handles IPC checks and validation
+                const { isAIControlled } = state;
+                const win = window as any;
+
+                // If not already saving...
+                const alreadySaved = state.savedAgents.some(a => a.id === event.data.id);
+                if (!alreadySaved && win.api && win.api.saveAgent) {
+
+                    // define async handler
+                    const handleDiscovery = async () => {
+                        let finalAgent = { ...event.data };
+
+                        // If AI is enabled/available, get Levin analysis
+                        // We always try if the bridge is available, as the user might have keys set up
+                        // The service returns a placeholder if keys are missing
+                        try {
+                            const analysis = await generateAgentDescription(event.data);
+                            if (analysis) {
+                                finalAgent = {
+                                    ...finalAgent,
+                                    name: analysis.name,
+                                    description: analysis.description,
+                                    tags: analysis.tags,
+                                    metrics: {
+                                        ...finalAgent.metrics,
+                                        cognitiveHorizon: analysis.cognitiveHorizon,
+                                        competency: analysis.competency
+                                    }
+                                };
+                            }
+                        } catch (err) {
+                            console.warn("Failed to generate AI description for new agent:", err);
+                        }
+
+                        // Save the fully populated agent
+                        const result = await win.api.saveAgent(finalAgent);
+                        if (result && result.success) {
+                            set(prev => ({
+                                savedAgents: [finalAgent, ...prev.savedAgents]
+                            }));
+                        }
+                    };
+
+                    handleDiscovery();
+                }
             }
 
             return updates;
@@ -295,7 +496,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     },
 
     triggerAI: async () => {
-        const { currentState, parameters, control, isAIControlled, aiHistory, scenarioMetadata, savedAgents, bestAgency, bestParameters, bestControl, interventionLog } = get();
+        const { currentState, parameters, control, isAIControlled, aiHistory, scenarioMetadata, savedAgents, bestAgency, bestControl, interventionLog } = get();
         if (!isAIControlled) return;
 
         set({ aiStatus: 'thinking' });
@@ -308,26 +509,47 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             scenarioMetadata,
             aiHistory,
             bestAgency,
-            bestParameters,
             bestControl,
             savedAgents
         );
 
+        if (decision?.error) {
+            set({ aiStatus: 'idle', aiError: decision.error });
+            return;
+        }
+
         if (decision) {
-            const newIntervention: InterventionLogEntry = {
+            // Clear error on success
+            set({ aiError: null });
+            const updatePayload = decision.params && typeof decision.params === 'object' ? decision.params : null;
+            const hasConfigUpdates = updatePayload && Object.keys(updatePayload).length > 0;
+            const controlEntry: InterventionLogEntry = {
                 id: crypto.randomUUID(),
                 timestamp: currentState.generation,
                 realtime: new Date(),
                 source: 'AI',
-                action: `Set U=${decision.u.toFixed(2)}${decision.params ? ' + Params' : ''}`,
+                action: `AI Control: U -> ${decision.u.toFixed(2)}`,
                 reasoning: decision.reasoning
             };
+
+            const newInterventionLog = [...interventionLog, controlEntry];
+
+            if (hasConfigUpdates) {
+                newInterventionLog.push({
+                    id: crypto.randomUUID(),
+                    timestamp: currentState.generation,
+                    realtime: new Date(),
+                    source: 'AI',
+                    action: `AI Config Update (${scenarioMetadata.type.toUpperCase()}): ${Object.keys(updatePayload).join(', ')}`,
+                    reasoning: decision.reasoning
+                });
+            }
 
             const newHistoryEntry: AIHistoryEntry = {
                 generation: currentState.generation,
                 action: `Set U=${decision.u.toFixed(2)}`,
                 u: decision.u,
-                params: decision.params,
+                params: updatePayload || undefined,
                 reasoning: decision.reasoning,
                 outcome: { A_before: currentState.A, A_after: currentState.A, delta_A: 0 }
             };
@@ -338,18 +560,55 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 lastAiUpdate: new Date(),
                 aiStatus: 'idle',
                 aiHistory: [...aiHistory, newHistoryEntry],
-                interventionLog: [...interventionLog, newIntervention]
+                interventionLog: newInterventionLog
             });
 
             // Apply to Runner
             runner.setControl({ U: decision.u });
-            if (decision.params) {
-                const merged = { ...parameters, ...decision.params };
+            if (updatePayload) {
                 const currentScenario = scenarios[get().currentScenarioId];
-                if (currentScenario.updateConfig) {
-                    currentScenario.updateConfig(merged);
+                if (scenarioMetadata.type === 'sde') {
+                    const merged = { ...parameters, ...updatePayload };
+                    if (currentScenario.updateConfig) {
+                        currentScenario.updateConfig(merged);
+                    }
+                    set({ parameters: merged });
+                } else if (currentScenario.updateConfig) {
+                    const updatedConfigs = { ...get().scenarioConfigs };
+                    if (scenarioMetadata.type === 'math') {
+                        updatedConfigs.math = sanitizeMathConfig({ ...updatedConfigs.math, ...updatePayload });
+                        currentScenario.updateConfig(updatedConfigs.math);
+                    } else if (scenarioMetadata.type === 'alignment') {
+                        updatedConfigs.alignment = sanitizeAlignmentConfig({ ...updatedConfigs.alignment, ...updatePayload });
+                        currentScenario.updateConfig(updatedConfigs.alignment);
+                    } else if (scenarioMetadata.type === 'bio') {
+                        updatedConfigs.bio = sanitizeBioConfig({ ...updatedConfigs.bio, ...updatePayload });
+                        currentScenario.updateConfig(updatedConfigs.bio);
+                    } else if (scenarioMetadata.type === 'agents') {
+                        updatedConfigs.agents = sanitizeAgentConfig({ ...updatedConfigs.agents, ...updatePayload });
+                        currentScenario.updateConfig(updatedConfigs.agents);
+                    }
+                    set({ scenarioConfigs: updatedConfigs });
                 }
-                set({ parameters: merged });
+            }
+
+            // Persist AI log to storage
+            const win = window as any;
+            if (win.api && win.api.logAIAction) {
+                const persistResult = await win.api.logAIAction({
+                    generation: currentState.generation,
+                    action: controlEntry.action,
+                    u: decision.u,
+                    params: updatePayload || {},
+                    reasoning: decision.reasoning,
+                    agency: currentState.A,
+                    bestAgency
+                });
+                if (!persistResult?.success) {
+                    set({ logPersistenceError: persistResult?.error || 'Failed to persist AI log.' });
+                } else if (get().logPersistenceError) {
+                    set({ logPersistenceError: null });
+                }
             }
         } else {
             set({ aiStatus: 'idle' });
@@ -387,33 +646,31 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     exportState: () => {
         const state = get();
         const currentScenario = scenarios[state.currentScenarioId];
-
-        const snapshot = {
+        const snapshot: SnapshotData = createSnapshot({
             meta: {
-                version: '2.0.0',
+                version: '2.1.0',
                 timestamp: Date.now(),
                 scenarioId: state.currentScenarioId
             },
             store: {
-                parameters: state.parameters,
+                sdeParameters: state.parameters,
                 control: state.control,
                 bestAgency: state.bestAgency,
                 aiHistory: state.aiHistory,
                 interventionLog: state.interventionLog,
-                currentState: state.currentState
+                currentState: state.currentState,
+                scenarioConfigs: state.scenarioConfigs
             },
             scenarioData: currentScenario.serialize()
-        };
+        });
 
         return JSON.stringify(snapshot, null, 2);
     },
 
     importState: (json: string) => {
         try {
-            const snapshot = JSON.parse(json);
-
-            // Validate basic structure
-            if (!snapshot.meta || !snapshot.store || !snapshot.scenarioData) {
+            const snapshot = parseSnapshot(json);
+            if (!snapshot) {
                 console.error("Invalid snapshot format");
                 return false;
             }
@@ -437,11 +694,12 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             set({
                 currentScenarioId: scenarioId,
                 scenarioMetadata: scenario.metadata,
-                parameters: snapshot.store.parameters,
+                parameters: snapshot.store.sdeParameters,
                 control: snapshot.store.control,
                 bestAgency: snapshot.store.bestAgency,
                 aiHistory: snapshot.store.aiHistory || [],
                 interventionLog: snapshot.store.interventionLog || [],
+                scenarioConfigs: snapshot.store.scenarioConfigs,
                 currentState: snapshot.store.currentState, // Restore UI metrics immediately
                 isPlaying: false,
                 telemetry: [], // Clear telemetry or try to restore? Telemetry is transient mostly.

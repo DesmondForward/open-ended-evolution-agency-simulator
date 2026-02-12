@@ -108,7 +108,7 @@ export class ASTMutator {
         if (!target) return cloned;
 
         if (target.type === 'ATOM') {
-            // Change atom: variable ↔ constant, or change value
+            // Change atom: variable <-> constant, or change value
             if (this.prng.next() < 0.5) {
                 // Switch to variable
                 target.value = VARIABLES[this.prng.nextInt(0, VARIABLES.length)];
