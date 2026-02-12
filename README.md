@@ -183,3 +183,7 @@ Key simulation parameters are defined in `src/renderer/src/simulation/types.ts`.
 ## 📄 License
 
 [MIT License](LICENSE)
+
+## Agent Navigation
+
+For a quick orientation map of the refactored workspace shell and key code paths, see `docs-agent-navigation.md`.
