@@ -7,9 +7,10 @@ import AgentPreviewModal from './AgentPreviewModal';
 
 interface LibraryViewProps {
     onClose: () => void;
+    embedded?: boolean;
 }
 
-const LibraryView: React.FC<LibraryViewProps> = ({ onClose }) => {
+const LibraryView: React.FC<LibraryViewProps> = ({ onClose, embedded = false }) => {
     const [agents, setAgents] = useState<SavedAgent[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedAgent, setSelectedAgent] = useState<SavedAgent | null>(null);
@@ -63,33 +64,40 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose }) => {
 
     return (
         <div style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
+            position: embedded ? 'relative' : 'fixed',
+            top: embedded ? undefined : 0,
+            left: embedded ? undefined : 0,
+            right: embedded ? undefined : 0,
+            bottom: embedded ? undefined : 0,
             backgroundColor: 'rgba(10, 10, 26, 0.95)',
-            zIndex: 1000,
+            zIndex: embedded ? 'auto' : 1000,
             display: 'flex',
             flexDirection: 'column',
             padding: '24px',
-            color: 'var(--color-text-primary)'
+            color: 'var(--color-text-primary)',
+            height: embedded ? '100%' : undefined,
+            boxSizing: 'border-box'
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <h1 style={{ margin: 0, fontFamily: '"Outfit", sans-serif', fontSize: '2rem' }}>
                     Universal Library of Agents
                 </h1>
-                <button
-                    onClick={onClose}
-                    style={{
-                        background: 'transparent',
-                        border: '1px solid var(--color-border)',
-                        color: 'var(--color-text-primary)',
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        borderRadius: '4px',
-                        fontSize: '1rem'
-                    }}
-                >
-                    Close
-                </button>
+                {!embedded && (
+                    <button
+                        onClick={onClose}
+                        style={{
+                            background: 'transparent',
+                            border: '1px solid var(--color-border)',
+                            color: 'var(--color-text-primary)',
+                            padding: '8px 16px',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            fontSize: '1rem'
+                        }}
+                    >
+                        Close
+                    </button>
+                )}
             </div>
 
             <div style={{ display: 'flex', gap: '24px', height: '100%', overflow: 'hidden' }}>
