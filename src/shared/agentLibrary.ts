@@ -1,8 +1,9 @@
 import { ScenarioType } from './scenarioTypes';
 
-export const LIBRARY_SCHEMA_VERSION = '2.1.0' as const;
+export const LIBRARY_SCHEMA_VERSION = '2.2.0' as const;
 
 export type AlertTriggerType = 'peak' | 'threshold' | 'sustained' | 'custom';
+export type AdapterType = 'python' | 'http' | 'cli' | 'native';
 
 export interface EmergenceMetrics {
     A: number;
@@ -40,6 +41,29 @@ export interface BehaviorTrace {
         alertRate: number;
     }>;
     uri?: string;
+}
+
+export interface AgentExecutionAdapter {
+    type: AdapterType;
+    runtime: string;
+    entrypoint: string;
+    invocationTemplate: string;
+    dependencies?: string[];
+}
+
+export interface UniversalAgentRepresentation {
+    standard: 'UARM-1';
+    intents: string[];
+    domains: string[];
+    io: {
+        inputs: string[];
+        outputs: string[];
+    };
+    capabilities: string[];
+    safetyNotes: string[];
+    adapters: AgentExecutionAdapter[];
+    discoverabilityText: string;
+    searchTokens: string[];
 }
 
 export interface LibraryEntry {
@@ -95,6 +119,8 @@ export interface LibraryEntry {
         seed?: number;
         appVersion?: string;
     };
+
+    universalRepresentation?: UniversalAgentRepresentation;
 
     derived?: {
         similarityVector?: number[];
@@ -159,6 +185,90 @@ const isStringArray = (value: unknown): value is string[] => (
     Array.isArray(value) && value.every(isString)
 );
 
+const dedupe = (items: string[]) => Array.from(new Set(items.map(item => item.trim()).filter(Boolean)));
+
+const normalizeToken = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const buildUniversalRepresentation = (entry: Pick<LibraryEntry, 'scenario' | 'xenobiologistReport' | 'metricsAtEmergence' | 'genome' | 'validationMetrics'>): UniversalAgentRepresentation => {
+    const tags = entry.xenobiologistReport.tags || [];
+    const scenarioText = `${entry.scenario.id} ${entry.scenario.name} ${entry.scenario.type}`;
+    const intentCandidates = [
+        ...tags,
+        entry.xenobiologistReport.specSheet,
+        scenarioText,
+        'optimize agency',
+        'adaptive strategy search'
+    ];
+
+    const capabilities = dedupe([
+        `operate in ${entry.scenario.type} scenario`,
+        entry.metricsAtEmergence.A > 0.8 ? 'high-agency execution' : 'stable agency execution',
+        entry.metricsAtEmergence.D > 0.6 ? 'diversity-preserving behavior' : 'focused behavior',
+        entry.metricsAtEmergence.C > 0.6 ? 'high-complexity adaptation' : 'sample-efficient adaptation'
+    ]);
+
+    const safetyNotes = dedupe([
+        entry.validationMetrics?.stateBoundsViolationRate === 0 ? 'No state-bound violations observed in recorded run.' : 'State bounds were violated; validate before production use.',
+        entry.validationMetrics?.controlBoundsViolationRate === 0 ? 'Control bounds respected in observed run.' : 'Control bounds were exceeded in observed run.',
+        'Always validate in a sandbox before deployment.'
+    ]);
+
+
+    const adapters: AgentExecutionAdapter[] = [
+        {
+            type: 'python',
+            runtime: 'python>=3.10',
+            entrypoint: 'instantiate_agent(config: dict) -> Agent',
+            invocationTemplate: [
+                'from agent_runtime import instantiate_agent',
+                'config = __AGENT_CONFIG__',
+                'agent = instantiate_agent(config)',
+                'result = agent.solve(use_case="__USE_CASE__")',
+                'print(result)'
+            ].join('\n'),
+            dependencies: ['agent_runtime', 'numpy']
+        },
+        {
+            type: 'native',
+            runtime: 'simulator-engine',
+            entrypoint: `library://${entry.id}`,
+            invocationTemplate: `summon_agent(id="${entry.id}", use_case="__USE_CASE__")`
+        }
+    ];
+
+    const searchTokens = dedupe([
+        ...tags,
+        ...intentCandidates,
+        ...capabilities,
+        ...entry.scenario.name.split(/\s+/),
+        entry.scenario.type,
+        entry.genome?.type || ''
+    ].map(normalizeToken).flatMap(token => token.split(/\s+/).filter(Boolean)));
+
+    return {
+        standard: 'UARM-1',
+        intents: dedupe(intentCandidates.map(normalizeToken)),
+        domains: dedupe([entry.scenario.type, entry.scenario.id, ...tags.map(normalizeToken)]),
+        io: {
+            inputs: dedupe(['use_case text', 'constraints', 'environment state']),
+            outputs: dedupe(['action proposal', 'parameter set', 'rationale'])
+        },
+        capabilities,
+        safetyNotes,
+        adapters,
+        discoverabilityText: `Agent ${entry.xenobiologistReport.name} for ${entry.scenario.name}. ${entry.xenobiologistReport.specSheet}`,
+        searchTokens
+    };
+};
+
+const withUniversalRepresentation = (entry: LibraryEntry): LibraryEntry => {
+    if (entry.universalRepresentation?.standard === 'UARM-1') return entry;
+    return {
+        ...entry,
+        universalRepresentation: buildUniversalRepresentation(entry)
+    };
+};
+
 export const isLegacyAgent = (value: unknown): value is LegacyAgent => {
     if (!isRecord(value)) return false;
     if (!isString(value.id)) return false;
@@ -219,7 +329,7 @@ export const migrateLegacyToLibrary = (legacy: LegacyAgent, context: MigrationCo
     const threshold = context.alertThreshold ?? 0.75;
     const triggerType: AlertTriggerType = context.triggerType || 'threshold';
 
-    return {
+    return withUniversalRepresentation({
         schemaVersion: LIBRARY_SCHEMA_VERSION,
         id: legacy.id,
         createdAt: legacy.timestamp,
@@ -258,7 +368,7 @@ export const migrateLegacyToLibrary = (legacy: LegacyAgent, context: MigrationCo
         },
         validationMetrics: legacy.validationMetrics,
         runContext: legacy.runContext
-    };
+    });
 };
 
 export const toLibraryIndexEntry = (entry: LibraryEntry): LibraryIndexEntry => ({
@@ -275,7 +385,7 @@ export const normalizeAgentEntry = (
     context: MigrationContext = {}
 ): { entry: LibraryEntry | null; migrated: boolean } => {
     if (isLibraryEntry(value)) {
-        return { entry: value, migrated: false };
+        return { entry: withUniversalRepresentation(value), migrated: true };
     }
     if (isRecord(value) && isString(value.schemaVersion)) {
         const scenarioFromLegacy = isRecord(value.scenario)
@@ -328,9 +438,12 @@ export const normalizeAgentEntry = (
                 environmentSnapshot: isRecord(value.environmentSnapshot) ? value.environmentSnapshot : undefined,
                 validationMetrics: isRecord(value.validationMetrics) ? value.validationMetrics : undefined,
                 runContext: isRecord(value.runContext) ? value.runContext : undefined,
+                universalRepresentation: isRecord(value.universalRepresentation)
+                    ? value.universalRepresentation as UniversalAgentRepresentation
+                    : undefined,
                 derived: isRecord(value.derived) ? value.derived : undefined
             };
-            return { entry, migrated: true };
+            return { entry: withUniversalRepresentation(entry), migrated: true };
         }
     }
     if (isLegacyAgent(value)) {

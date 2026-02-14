@@ -6,6 +6,7 @@ import {
     normalizeAgentEntry,
     toLibraryIndexEntry
 } from '../../shared/agentLibrary';
+import { rankAgentsForUseCase, SummonAgentRequest } from '../../shared/agentSummoning';
 
 export interface StorageResult {
     success: boolean;
@@ -201,4 +202,9 @@ export function deleteAgentFromLibrary(baseDir: string, id: string): StorageResu
     } catch (error) {
         return { success: false, error: String(error) };
     }
+}
+
+export function summonAgentsFromLibrary(baseDir: string, request: SummonAgentRequest) {
+    const entries = getAgentsFromLibrary(baseDir);
+    return rankAgentsForUseCase(entries, request);
 }

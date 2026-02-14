@@ -5,7 +5,8 @@ import {
     validateAiDescriptionRequestPayload,
     validateAiLogPayload,
     validateDeleteAgentPayload,
-    validateSaveAgentPayload
+    validateSaveAgentPayload,
+    validateSummonAgentPayload
 } from '../shared/ipcValidation'
 
 const allowedInvokeChannels = new Set([
@@ -14,6 +15,7 @@ const allowedInvokeChannels = new Set([
     'save-agent',
     'get-agents',
     'delete-agent',
+    'summon-agent',
     'ai-control-request',
     'ai-agent-description'
 ]);
@@ -49,6 +51,12 @@ const api = {
             return Promise.resolve({ success: false, error: 'Invalid agent id.' });
         }
         return invokeAllowed('delete-agent', id);
+    },
+    summonAgent: (payload: any) => {
+        if (!validateSummonAgentPayload(payload)) {
+            return Promise.resolve({ success: false, error: 'Invalid summon payload.' });
+        }
+        return invokeAllowed('summon-agent', payload);
     },
     requestAIControl: (payload: any) => {
         if (!validateAiControlRequestPayload(payload)) {

@@ -3,13 +3,14 @@ import { join } from 'path'
 import * as fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { appendAiLogEntry } from './storage/aiLogStorage'
-import { deleteAgentFromLibrary, getAgentsFromLibrary, saveAgentToLibrary } from './storage/agentLibraryStorage'
+import { deleteAgentFromLibrary, getAgentsFromLibrary, saveAgentToLibrary, summonAgentsFromLibrary } from './storage/agentLibraryStorage'
 import {
     validateAiControlRequestPayload,
     validateAiDescriptionRequestPayload,
     validateAiLogPayload,
     validateDeleteAgentPayload,
-    validateSaveAgentPayload
+    validateSaveAgentPayload,
+    validateSummonAgentPayload
 } from '../shared/ipcValidation'
 import { requestAiControl, requestAgentDescription } from './aiService'
 
@@ -97,6 +98,16 @@ ipcMain.handle('delete-agent', async (_, id) => {
     }
     const userDataPath = app.getPath('userData')
     return deleteAgentFromLibrary(userDataPath, id)
+})
+
+
+ipcMain.handle('summon-agent', async (_, payload) => {
+    if (!validateSummonAgentPayload(payload)) {
+        return { success: false, error: 'Invalid summon payload.' }
+    }
+    const userDataPath = app.getPath('userData')
+    const matches = summonAgentsFromLibrary(userDataPath, payload)
+    return { success: true, data: matches }
 })
 
 let aiQueue: Promise<void> = Promise.resolve();

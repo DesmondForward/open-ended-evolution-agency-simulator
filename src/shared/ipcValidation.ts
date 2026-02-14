@@ -79,6 +79,12 @@ export interface DeleteAgentPayload {
     id: string;
 }
 
+export interface SummonAgentPayload {
+    query: string;
+    topK?: number;
+    preferredAdapter?: 'python' | 'http' | 'cli' | 'native';
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> => {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
@@ -169,5 +175,13 @@ export const validateSaveAgentPayload = (value: unknown): value is SaveAgentPayl
 export const validateDeleteAgentPayload = (value: unknown): value is DeleteAgentPayload => {
     if (!isRecord(value)) return false;
     if (!isString(value.id)) return false;
+    return true;
+};
+
+export const validateSummonAgentPayload = (value: unknown): value is SummonAgentPayload => {
+    if (!isRecord(value)) return false;
+    if (!isString(value.query) || !value.query.trim()) return false;
+    if (value.topK !== undefined && !isFiniteNumber(value.topK)) return false;
+    if (value.preferredAdapter !== undefined && !['python', 'http', 'cli', 'native'].includes(String(value.preferredAdapter))) return false;
     return true;
 };
