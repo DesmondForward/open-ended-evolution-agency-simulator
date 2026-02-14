@@ -1,7 +1,7 @@
 import * as os from 'os';
 import * as fs from 'fs';
 import { join } from 'path';
-import { deleteAgentFromLibrary, getAgentsFromLibrary, saveAgentToLibrary } from './agentLibraryStorage';
+import { deleteAgentFromLibrary, getAgentsFromLibrary, saveAgentToLibrary, summonAgentsFromLibrary } from './agentLibraryStorage';
 import { LibraryEntry, LIBRARY_SCHEMA_VERSION } from '../../shared/agentLibrary';
 
 function assert(condition: boolean, message: string) {
@@ -77,6 +77,12 @@ function runTests() {
     assert(listAfterSave.some(a => a.id === 'agent-test'), 'Legacy agent id matches');
     assert(listAfterSave.some(a => a.id === 'agent-v2'), 'V2 agent id matches');
     assert(listAfterSave.every(a => a.schemaVersion === LIBRARY_SCHEMA_VERSION), 'Agents migrated to current schema');
+
+    assert(listAfterSave.every(a => a.universalRepresentation?.standard === 'UARM-1'), 'Agents have universal representation manifest');
+
+    const summonResult = summonAgentsFromLibrary(tmpDir, { query: 'safe high agency planner', topK: 1, preferredAdapter: 'python' });
+    assert(summonResult.length === 1, 'Summon returns ranked agent');
+    assert(Boolean(summonResult[0].summonPlan.invocation), 'Summon includes executable invocation template');
 
     const deleteLegacy = deleteAgentFromLibrary(tmpDir, 'agent-test');
     assert(deleteLegacy.success, 'Legacy agent deleted from library');

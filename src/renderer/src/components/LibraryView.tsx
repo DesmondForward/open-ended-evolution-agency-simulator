@@ -20,6 +20,8 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose, embedded = false }) 
     const [search, setSearch] = useState('');
     const [scenarioFilter, setScenarioFilter] = useState<string>('all');
     const [sortKey, setSortKey] = useState<'newest' | 'agency' | 'complexity' | 'diversity'>('newest');
+    const [summonQuery, setSummonQuery] = useState('');
+    const [summonOutput, setSummonOutput] = useState<string>('');
 
     useEffect(() => {
         const fetchAgents = async () => {
@@ -93,7 +95,9 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose, embedded = false }) 
                 getEntryName(agent),
                 getEntryDescription(agent),
                 getEntryScenarioLabel(agent),
-                getEntryTags(agent).join(' ')
+                getEntryTags(agent).join(' '),
+                agent.universalRepresentation?.intents?.join(' ') || '',
+                agent.universalRepresentation?.capabilities?.join(' ') || ''
             ].join(' ').toLowerCase();
             return blob.includes(query);
         });
@@ -149,6 +153,26 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose, embedded = false }) 
         // Generate LaTeX string
         // dA = \underbrace{ ( coeff * C * (1-A) - decay * A ) }_{\text{Deterministic Drift}} dt + \underbrace{ sigma }_{\text{Noise}} dW_A
         return `dA = \\underbrace{\\big( ${effectiveGrowthCoeff} \\, C \\, (1-A) - ${decayRate} \\, A \\big)}_{\\text{Deterministic Drift}} dt + \\underbrace{${sigma}}_{\\text{Noise}} dW_A`;
+    };
+
+
+    const runSummonSearch = async () => {
+        const query = summonQuery.trim();
+        if (!query) return;
+        const win = window as any;
+        if (win.api && win.api.summonAgent) {
+            const result = await win.api.summonAgent({ query, topK: 1, preferredAdapter: 'python' });
+            if (result?.success && result.data?.length > 0) {
+                const match = result.data[0];
+                setSummonOutput(`# Match: ${match.entry.xenobiologistReport.name}
+Score: ${match.score.toFixed(3)}
+Adapter: ${match.summonPlan.adapterType}
+
+${match.summonPlan.invocation}`);
+            } else {
+                setSummonOutput('No compatible agent found for this use-case query.');
+            }
+        }
     };
 
     const copyToClipboard = (text: string) => {
@@ -371,10 +395,40 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onClose, embedded = false }) 
                                 {JSON.stringify(selectedAgent.genome?.data ?? selectedAgent.environmentSnapshot?.scenarioConfig ?? selectedAgent.environmentSnapshot?.parameters ?? {}, null, 2)}
                             </div>
 
+                            {selectedAgent.universalRepresentation && (
+                                <>
+                                    <h3>Universal Agent Representation (UARM-1)</h3>
+                                    <div style={{ background: 'var(--color-surface)', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid var(--color-border)' }}>
+                                        <div style={{ marginBottom: '8px', opacity: 0.85 }}><strong>Capabilities:</strong> {selectedAgent.universalRepresentation.capabilities.join(' • ')}</div>
+                                        <div style={{ marginBottom: '8px', opacity: 0.85 }}><strong>Intents:</strong> {selectedAgent.universalRepresentation.intents.slice(0, 6).join(', ')}</div>
+                                        <div style={{ opacity: 0.85 }}><strong>Adapters:</strong> {selectedAgent.universalRepresentation.adapters.map(adapter => `${adapter.type}:${adapter.runtime}`).join(' • ')}</div>
+                                    </div>
+
+                                    <h4>Summon for Use-Case</h4>
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                                        <input
+                                            value={summonQuery}
+                                            onChange={(e) => setSummonQuery(e.target.value)}
+                                            placeholder='e.g. "Need a safe high-agency planner for low-volatility tasks"'
+                                            style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text-primary)' }}
+                                        />
+                                        <button
+                                            onClick={runSummonSearch}
+                                            style={{ background: 'var(--color-primary)', border: 'none', borderRadius: '6px', color: '#001015', cursor: 'pointer', fontWeight: 600, padding: '8px 14px' }}
+                                        >
+                                            Summon
+                                        </button>
+                                    </div>
+                                    {summonOutput && (
+                                        <pre style={{ whiteSpace: 'pre-wrap', background: '#05070f', border: '1px solid #263248', borderRadius: '8px', padding: '12px', marginTop: 0, marginBottom: '24px', fontSize: '0.8rem' }}>{summonOutput}</pre>
+                                    )}
+                                </>
+                            )}
+
                             {getSdeParameters(selectedAgent) && (
                                 <>
                                     <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        Final Stochastic Form
+                                        Legacy Final Stochastic Form
                                         <button
                                             onClick={() => copyToClipboard(generateEquation(selectedAgent))}
                                             style={{
