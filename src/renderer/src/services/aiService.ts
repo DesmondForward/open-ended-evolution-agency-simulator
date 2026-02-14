@@ -1,4 +1,5 @@
-import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry, SavedAgent, ScenarioMetadata } from '../simulation/types';
+import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry, ScenarioMetadata } from '../simulation/types';
+import { LibraryEntry, LegacyAgent } from '../../../shared/agentLibrary';
 import { validateAiControlResponsePayload, validateAiDescriptionResponsePayload, AiDescriptionResponsePayload } from '../../../shared/ipcValidation';
 
 export const fetchAIControl = async (
@@ -9,8 +10,9 @@ export const fetchAIControl = async (
     history: AIHistoryEntry[] = [],
     bestAgency: number = 0,
     bestControl: ControlSignal | null = null,
-    savedAgents: SavedAgent[] = []
+    _savedAgents: LibraryEntry[] = []
 ): Promise<{ u: number; reasoning: string; params?: any; error?: string } | null> => {
+    void _savedAgents;
     if (typeof window === 'undefined') {
         return { error: 'Window not defined (SSR?)', u: control.U, reasoning: '' };
     }
@@ -49,7 +51,7 @@ export const fetchAIControl = async (
 };
 
 export const generateAgentDescription = async (
-    agentData: Omit<SavedAgent, 'name' | 'description' | 'tags'>
+    agentData: Omit<LegacyAgent, 'name' | 'description' | 'tags'>
 ): Promise<AiDescriptionResponsePayload | null> => {
     if (typeof window === 'undefined') {
         return null;

@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import { LibraryEntry } from '../shared/agentLibrary'
 
 declare global {
     interface Window {
@@ -6,11 +7,11 @@ declare global {
         api: {
             logAIAction: (data: any) => Promise<{ success: boolean; path?: string; error?: string }>
             openLogsFolder: () => Promise<{ success: boolean; error?: string }>
-            saveAgent: (agent: any) => Promise<{ success: boolean; path?: string; error?: string }>
-            getAgents: () => Promise<any[]>
+            saveAgent: (agent: LibraryEntry) => Promise<{ success: boolean; path?: string; error?: string }>
+            getAgents: () => Promise<LibraryEntry[]>
             deleteAgent: (id: string) => Promise<{ success: boolean; error?: string }>
             requestAIControl: (payload: any) => Promise<{ success: boolean; data?: { u: number; reasoning: string; params?: Record<string, unknown> }; error?: string }>
-            generateAgentDescription: (payload: any) => Promise<{ success: boolean; data?: { name: string; description: string; tags: string[] }; error?: string }>
+            generateAgentDescription: (payload: any) => Promise<{ success: boolean; data?: { name: string; description: string; tags: string[]; cognitiveHorizon?: number; competency?: number }; error?: string }>
         }
     }
 }

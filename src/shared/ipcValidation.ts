@@ -1,4 +1,5 @@
-export type ScenarioType = 'sde' | 'math' | 'alignment' | 'bio' | 'agents';
+import { ScenarioType } from './scenarioTypes';
+import { isLegacyAgent, isLibraryEntry, LegacyAgent, LibraryEntry } from './agentLibrary';
 
 export interface AiLogPayload {
     generation: number;
@@ -72,10 +73,7 @@ export interface AiDescriptionResponsePayload {
     competency: number;
 }
 
-export interface SaveAgentPayload {
-    id: string;
-    timestamp?: string;
-}
+export type SaveAgentPayload = LibraryEntry | LegacyAgent;
 
 export interface DeleteAgentPayload {
     id: string;
@@ -160,6 +158,8 @@ export const validateAiDescriptionResponsePayload = (value: unknown): value is A
 };
 
 export const validateSaveAgentPayload = (value: unknown): value is SaveAgentPayload => {
+    if (isLibraryEntry(value)) return true;
+    if (isLegacyAgent(value)) return true;
     if (!isRecord(value)) return false;
     if (!isString(value.id)) return false;
     if (value.timestamp !== undefined && !isString(value.timestamp)) return false;

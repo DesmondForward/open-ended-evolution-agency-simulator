@@ -16,7 +16,7 @@ import {
     ScenarioEvent
 } from '../simulation/types';
 import { fetchAIControl, generateAgentDescription } from '../services/aiService';
-import { SavedAgent } from '../simulation/types';
+import { LibraryEntry, LegacyAgent, LIBRARY_SCHEMA_VERSION } from '../../../shared/agentLibrary';
 import { ScenarioRunner } from '../simulation/runner/ScenarioRunner';
 import { SDEScenario } from '../simulation/scenarios/sde/SDEScenario';
 import { MathScenario } from '../simulation/scenarios/math/MathScenario';
@@ -53,7 +53,7 @@ interface SimulationStore {
     };
 
     // Agent Library
-    savedAgents: SavedAgent[];
+    savedAgents: LibraryEntry[];
 
     // AI Control
     isAIControlled: boolean;
@@ -69,6 +69,8 @@ interface SimulationStore {
     bestParameters: SimulationParameters | null;
     bestControl: ControlSignal | null;
     lastSavedGeneration: number;
+    currentRunId: string;
+    currentRunSeed: number;
 
     // Actions
     togglePlay: () => void;
@@ -126,6 +128,287 @@ const getScenarioConfigForId = (
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const ensureNumber = (value: unknown, fallback = 0) => (
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+);
+
+const ensureOptionalNumber = (value: unknown): number | undefined => (
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined
+);
+
+const ensureString = (value: unknown, fallback: string) => (
+    typeof value === 'string' && value.trim().length > 0 ? value : fallback
+);
+
+const ensureStringArray = (value: unknown): string[] => (
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+);
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const downsampleTelemetry = (points: TelemetryPoint[], maxPoints: number) => {
+    if (points.length <= maxPoints) return points;
+    const stride = Math.ceil(points.length / maxPoints);
+    const sampled: TelemetryPoint[] = [];
+    for (let i = 0; i < points.length; i += stride) {
+        sampled.push(points[i]);
+    }
+    return sampled.slice(0, maxPoints);
+};
+
+const buildBehaviorTrace = (telemetry: TelemetryPoint[]) => {
+    if (!telemetry.length) {
+        return { summary: 'No telemetry captured for this emergence window.' };
+    }
+    const samples = downsampleTelemetry(telemetry, 200);
+    const peakA = Math.max(...samples.map(p => p.A));
+    const avgA = samples.reduce((sum, p) => sum + p.A, 0) / samples.length;
+    const avgU = samples.reduce((sum, p) => sum + p.U, 0) / samples.length;
+    const fromGen = samples[0].generation;
+    const toGen = samples[samples.length - 1].generation;
+    return {
+        summary: `Window ${fromGen.toFixed(1)}–${toGen.toFixed(1)} (n=${samples.length}). Peak A=${peakA.toFixed(3)}, Avg A=${avgA.toFixed(3)}, Avg U=${avgU.toFixed(2)}.`,
+        window: {
+            fromGeneration: fromGen,
+            toGeneration: toGen,
+            points: samples.length
+        },
+        samples
+    };
+};
+
+const deriveAutoTags = (metrics: { A: number; C: number; D: number; U: number; alertRate: number }, existing: string[]) => {
+    const tags = new Set(existing);
+    if (metrics.A >= 0.9) tags.add('High-Agency');
+    if (metrics.A >= 0.75 && metrics.A < 0.9) tags.add('Threshold-Crosser');
+    if (metrics.U >= 0.7) tags.add('High-Pressure');
+    if (metrics.U <= 0.3) tags.add('Low-U');
+    if (metrics.C >= 0.8) tags.add('High-Complexity');
+    if (metrics.D >= 0.8) tags.add('High-Diversity');
+    if (metrics.D <= 0.2) tags.add('Low-Diversity');
+    if (metrics.alertRate > 1) tags.add('Sustained-Alert');
+    return Array.from(tags);
+};
+
+const computeSimilarityVector = (metrics: {
+    A: number;
+    C: number;
+    D: number;
+    U: number;
+    alertRate: number;
+    cognitiveHorizon?: number;
+    competency?: number;
+}) => [
+    metrics.A,
+    metrics.C,
+    metrics.D,
+    metrics.U,
+    metrics.alertRate,
+    metrics.cognitiveHorizon ?? 0,
+    metrics.competency ?? 0
+];
+
+const extractGenome = (legacy: LegacyAgent, scenarioType: ScenarioMetadata['type']) => {
+    if (scenarioType === 'sde') {
+        return {
+            type: 'sde-params',
+            encoding: 'json' as const,
+            data: legacy.parameters
+        };
+    }
+    const maybeGenome = (legacy.parameters as any)?.genome;
+    if (maybeGenome) {
+        return {
+            type: `${scenarioType}-genome`,
+            encoding: 'json' as const,
+            data: maybeGenome
+        };
+    }
+    return undefined;
+};
+
+const summarizeScenarioState = (scenarioId: string, state: any) => {
+    if (!state || typeof state !== 'object') return {};
+
+    switch (scenarioId) {
+        case 'sde-v1':
+            return {
+                simulationState: state.simulationState || state.state || state,
+                parameters: state.params || state.parameters
+            };
+        case 'math':
+            return {
+                generation: state.generation,
+                populationSize: Array.isArray(state.agents) ? state.agents.length : 0,
+                claims: Array.isArray(state.claims) ? state.claims.length : 0,
+                metrics: state.metrics
+            };
+        case 'alignment':
+            return {
+                generation: state.generation,
+                populationSize: Array.isArray(state.agents) ? state.agents.length : 0,
+                globalResources: state.globalResources,
+                oversightIntensity: state.oversightIntensity,
+                metrics: state.metrics
+            };
+        case 'bio':
+            return {
+                generation: state.generation,
+                populationSize: Array.isArray(state.agents) ? state.agents.length : 0,
+                toxicity: state.toxicity,
+                metrics: state.metrics
+            };
+        case 'agents':
+            return {
+                generation: state.generation,
+                populationSize: Array.isArray(state.agents) ? state.agents.length : 0,
+                taskCount: Array.isArray(state.currentTasks) ? state.currentTasks.length : 0,
+                metrics: state.metrics
+            };
+        default:
+            return { state };
+    }
+};
+
+const buildLegacyAgent = (
+    data: any,
+    context: {
+        currentState: SimulationState;
+        parameters: Record<string, unknown>;
+        control: ControlSignal;
+        validationMetrics: ValidationMetrics;
+        aiHistory: AIHistoryEntry[];
+        bestAgency: number;
+    }
+): LegacyAgent => {
+    const id = ensureString(data?.id, crypto.randomUUID());
+    const timestamp = ensureString(data?.timestamp, new Date().toISOString());
+    const generation = ensureNumber(data?.generation, context.currentState.generation);
+
+    const metricsSource = isRecord(data?.metrics) ? data.metrics : {};
+    const metrics = {
+        A: ensureNumber(metricsSource.A, context.currentState.A),
+        C: ensureNumber(metricsSource.C, context.currentState.C),
+        D: ensureNumber(metricsSource.D, context.currentState.D),
+        alertRate: ensureNumber(metricsSource.alertRate, context.currentState.alertRate),
+        cognitiveHorizon: ensureOptionalNumber(metricsSource.cognitiveHorizon),
+        competency: ensureOptionalNumber(metricsSource.competency)
+    };
+
+    const parameters = isRecord(data?.parameters) ? data.parameters : context.parameters;
+    const environmentalControl = isRecord(data?.environmentalControl)
+        ? { U: ensureNumber(data.environmentalControl.U, context.control.U) }
+        : { U: context.control.U };
+
+    const historySnippet = Array.isArray(data?.historySnippet) ? data.historySnippet : context.aiHistory.slice(-6);
+    const validationMetrics = isRecord(data?.validationMetrics)
+        ? data.validationMetrics
+        : context.validationMetrics;
+    const runContext = isRecord(data?.runContext)
+        ? data.runContext
+        : { bestAgencySoFar: context.bestAgency };
+
+    return {
+        id,
+        timestamp,
+        name: ensureString(data?.name, `Agent-${id.substring(0, 6)}`),
+        description: ensureString(data?.description, 'Emergent agent captured by the library pipeline.'),
+        tags: ensureStringArray(data?.tags),
+        generation,
+        metrics,
+        parameters,
+        environmentalControl,
+        historySnippet,
+        validationMetrics,
+        runContext
+    };
+};
+
+const buildLibraryEntry = (
+    legacy: LegacyAgent,
+    analysis: { name: string; description: string; tags: string[]; cognitiveHorizon: number; competency: number } | null,
+    context: {
+        scenarioMetadata: ScenarioMetadata;
+        control: ControlSignal;
+        parameters: SimulationParameters;
+        telemetry: TelemetryPoint[];
+        validationMetrics: ValidationMetrics;
+        interventionLog: InterventionLogEntry[];
+        bestAgency: number;
+        runId: string;
+        seed: number;
+        scenarioState: any;
+        scenarioConfig: any;
+        eventType: ScenarioEvent['type'];
+    }
+): LibraryEntry => {
+    const threshold = context.scenarioMetadata.type === 'sde'
+        ? ensureNumber((context.parameters as any).A_alert, 0.75)
+        : 0.75;
+
+    const metrics = {
+        A: legacy.metrics.A,
+        C: legacy.metrics.C,
+        D: legacy.metrics.D,
+        U: legacy.environmentalControl.U,
+        alertRate: legacy.metrics.alertRate,
+        generation: legacy.generation,
+        cognitiveHorizon: analysis?.cognitiveHorizon ?? legacy.metrics.cognitiveHorizon,
+        competency: analysis?.competency ?? legacy.metrics.competency
+    };
+
+    const mergedTags = deriveAutoTags(metrics, analysis?.tags?.length ? analysis.tags : legacy.tags || []);
+
+    const confidence = metrics.A >= threshold
+        ? Math.min(1, 0.85 + (metrics.A - threshold) / Math.max(0.01, 1 - threshold))
+        : 0.6;
+
+    return {
+        schemaVersion: LIBRARY_SCHEMA_VERSION,
+        id: legacy.id,
+        createdAt: legacy.timestamp,
+        scenario: {
+            id: context.scenarioMetadata.id,
+            name: context.scenarioMetadata.name,
+            type: context.scenarioMetadata.type,
+            version: context.scenarioMetadata.version
+        },
+        metricsAtEmergence: metrics,
+        alertDetails: {
+            threshold,
+            confidence,
+            triggerType: context.eventType === 'agent_emerged' ? 'threshold' : 'custom'
+        },
+        genome: extractGenome(legacy, context.scenarioMetadata.type),
+        behaviorTrace: buildBehaviorTrace(context.telemetry),
+        xenobiologistReport: {
+            name: analysis?.name || legacy.name || `Agent-${legacy.id.substring(0, 6)}`,
+            specSheet: analysis?.description || legacy.description || 'Emergent agent captured by the library pipeline.',
+            tags: mergedTags,
+            cognitiveHorizon: analysis?.cognitiveHorizon ?? legacy.metrics.cognitiveHorizon,
+            competency: analysis?.competency ?? legacy.metrics.competency
+        },
+        researcherInterventions: context.interventionLog.slice(-12),
+        environmentSnapshot: {
+            control: context.control,
+            scenarioConfig: context.scenarioConfig,
+            scenarioStateSummary: summarizeScenarioState(context.scenarioMetadata.id, context.scenarioState)
+        },
+        validationMetrics: legacy.validationMetrics || context.validationMetrics,
+        runContext: {
+            bestAgencySoFar: legacy.runContext?.bestAgencySoFar ?? context.bestAgency,
+            runId: context.runId,
+            seed: context.seed,
+            appVersion: '2.0.0'
+        },
+        derived: {
+            similarityVector: computeSimilarityVector(metrics)
+        }
+    };
+};
 
 const sanitizeMathConfig = (config: MathConfig): MathConfig => ({
     populationSize: Math.max(1, Math.floor(config.populationSize)),
@@ -189,6 +472,8 @@ if (storedBest) {
     }
 }
 const initialLastGen = storedLastGen ? parseInt(storedLastGen) : 0;
+const initialRunId = crypto.randomUUID();
+const initialRunSeed = Date.now();
 
 export const useSimulationStore = create<SimulationStore & { handleTelemetry: (pt: TelemetryPoint) => void, handleEvent: (evt: any) => void }>((set, get) => ({
     // Initial State
@@ -236,6 +521,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     bestParameters: initialBest ? initialBest.parameters : null,
     bestControl: initialBest ? initialBest.control : null,
     lastSavedGeneration: Number.isFinite(initialLastGen) ? initialLastGen : 0,
+    currentRunId: initialRunId,
+    currentRunSeed: initialRunSeed,
 
     // Actions
     togglePlay: () => {
@@ -254,7 +541,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         runner.stop();
         const currentId = get().currentScenarioId;
         const scenarioConfig = getScenarioConfigForId(currentId, get().parameters, get().scenarioConfigs);
-        scenarios[currentId].initialize(Date.now(), scenarioConfig); // Re-init with scenario config
+        const seed = Date.now();
+        scenarios[currentId].initialize(seed, scenarioConfig); // Re-init with scenario config
         runner.setScenario(scenarios[currentId]);
 
         set({
@@ -266,6 +554,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             aiReasoning: "",
             aiHistory: [],
             aiError: null,
+            currentRunId: crypto.randomUUID(),
+            currentRunSeed: seed,
         });
     },
 
@@ -346,7 +636,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         // Re-initialize? Or keep state? Usually switch = fresh start or resume.
         // Let's re-initialize to be safe for now.
         const scenarioConfig = getScenarioConfigForId(id, get().parameters, get().scenarioConfigs);
-        scenario.initialize(Date.now(), scenarioConfig);
+        const seed = Date.now();
+        scenario.initialize(seed, scenarioConfig);
 
         runner.setScenario(scenario);
 
@@ -356,7 +647,9 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             isPlaying: false,
             telemetry: [],
             alerts: [],
-            events: []
+            events: [],
+            currentRunId: crypto.randomUUID(),
+            currentRunSeed: seed
         });
     },
 
@@ -443,46 +736,54 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 };
                 updates.alerts = [...state.alerts, newAlert];
             } else if (event.type === 'agent_emerged') {
-                // Determine if we should trigger AI analysis
-                // We use the service wrapper which handles IPC checks and validation
-                const { isAIControlled } = state;
                 const win = window as any;
+                const scenarioConfig = getScenarioConfigForId(
+                    state.currentScenarioId,
+                    state.parameters,
+                    state.scenarioConfigs
+                );
 
-                // If not already saving...
-                const alreadySaved = state.savedAgents.some(a => a.id === event.data.id);
+                const legacyAgent = buildLegacyAgent(event.data, {
+                    currentState: state.currentState,
+                    parameters: scenarioConfig,
+                    control: state.control,
+                    validationMetrics: state.validationMetrics,
+                    aiHistory: state.aiHistory,
+                    bestAgency: state.bestAgency
+                });
+
+                const alreadySaved = state.savedAgents.some(a => a.id === legacyAgent.id);
                 if (!alreadySaved && win.api && win.api.saveAgent) {
-
-                    // define async handler
                     const handleDiscovery = async () => {
-                        let finalAgent = { ...event.data };
-
-                        // If AI is enabled/available, get Levin analysis
-                        // We always try if the bridge is available, as the user might have keys set up
-                        // The service returns a placeholder if keys are missing
+                        let analysis = null;
                         try {
-                            const analysis = await generateAgentDescription(event.data);
-                            if (analysis) {
-                                finalAgent = {
-                                    ...finalAgent,
-                                    name: analysis.name,
-                                    description: analysis.description,
-                                    tags: analysis.tags,
-                                    metrics: {
-                                        ...finalAgent.metrics,
-                                        cognitiveHorizon: analysis.cognitiveHorizon,
-                                        competency: analysis.competency
-                                    }
-                                };
-                            }
+                            analysis = await generateAgentDescription(legacyAgent);
                         } catch (err) {
                             console.warn("Failed to generate AI description for new agent:", err);
                         }
 
-                        // Save the fully populated agent
-                        const result = await win.api.saveAgent(finalAgent);
+                        const scenarioState = scenarios[state.currentScenarioId]?.getState
+                            ? scenarios[state.currentScenarioId].getState()
+                            : null;
+                        const entry = buildLibraryEntry(legacyAgent, analysis, {
+                            scenarioMetadata: state.scenarioMetadata,
+                            control: state.control,
+                            parameters: state.parameters,
+                            telemetry: state.telemetry,
+                            validationMetrics: state.validationMetrics,
+                            interventionLog: state.interventionLog,
+                            bestAgency: state.bestAgency,
+                            runId: state.currentRunId,
+                            seed: state.currentRunSeed,
+                            scenarioState,
+                            scenarioConfig,
+                            eventType: event.type
+                        });
+
+                        const result = await win.api.saveAgent(entry);
                         if (result && result.success) {
                             set(prev => ({
-                                savedAgents: [finalAgent, ...prev.savedAgents]
+                                savedAgents: [entry, ...prev.savedAgents]
                             }));
                         }
                     };
@@ -704,7 +1005,9 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 isPlaying: false,
                 telemetry: [], // Clear telemetry or try to restore? Telemetry is transient mostly.
                 alerts: [],
-                events: [] // Reset events on import
+                events: [], // Reset events on import
+                currentRunId: crypto.randomUUID(),
+                currentRunSeed: Date.now()
             });
 
             // Set runner context
