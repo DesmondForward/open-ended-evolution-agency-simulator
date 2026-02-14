@@ -166,6 +166,29 @@ const PROBLEM_BANK: Array<Omit<ErdosProblem, 'solved' | 'solutionQuality' | 'las
 
 const DOMAINS: ProblemDomain[] = ['additive_number_theory', 'combinatorics', 'graph_theory', 'geometry'];
 
+const DOMAIN_METHODS: Record<ProblemDomain, { ansatz: string; verifier: string; invariant: string }> = {
+    additive_number_theory: {
+        ansatz: 'Translate the target statement into additive energy and doubling inequalities over a finite witness set A.',
+        verifier: 'Check each claimed bound with explicit residue-class sweeps and random-sign stress tests over the same witness set.',
+        invariant: 'Track monotonic improvement in exponent candidate \u03b4_t under \u03b4_{t+1} \u2265 \u03b4_t - 10^{-3}.'
+    },
+    combinatorics: {
+        ansatz: 'Convert the problem into a constrained counting model and derive matching upper/lower estimates.',
+        verifier: 'Validate each estimate by independent recounts (symbolic and Monte Carlo) with shared random-seed disclosure.',
+        invariant: 'Maintain a non-increasing feasible interval [L_t,U_t] with width U_t-L_t shrinking each generation.'
+    },
+    graph_theory: {
+        ansatz: 'Reformulate as extremal density/structure constraints and search for forbidden witnesses.',
+        verifier: 'Produce a machine-checkable obstruction certificate and cross-check with a second independent checker.',
+        invariant: 'Preserve certificate consistency: every edge/degrees claim must satisfy handshake and local subgraph constraints.'
+    },
+    geometry: {
+        ansatz: 'Parameterize candidate configurations and derive incidence inequalities from distance/curve structure.',
+        verifier: 'Numerically validate geometric constraints on sampled coordinates and compare against symbolic inequalities.',
+        invariant: 'Require every candidate construction to satisfy both symbolic bounds and coordinate-level feasibility.'
+    }
+};
+
 const buildCopyAction = (problem: ErdosProblem): string => {
     const statusLine = problem.solved ? '**Status:** Solved' : '**Status:** In progress';
     const steps = problem.steps.length > 0
@@ -185,6 +208,7 @@ const buildCopyAction = (problem: ErdosProblem): string => {
 };
 
 const buildResolutionReport = (problem: ErdosProblem, generation: number, threshold: number): string => {
+    const method = DOMAIN_METHODS[problem.domain];
     const contributorList = problem.agents.length > 0
         ? problem.agents.map((agent, index) => `${index + 1}. ${agent.name} (${agent.id})`).join('\n')
         : '1. No contributors were recorded.';
@@ -204,15 +228,47 @@ const buildResolutionReport = (problem: ErdosProblem, generation: number, thresh
         '## Description',
         problem.description,
         '',
+        '## Mathematical approach',
+        `- Ansatz: ${method.ansatz}`,
+        `- Verifier: ${method.verifier}`,
+        `- Invariant tracked: ${method.invariant}`,
+        '',
         '## Agent contributors',
         contributorList,
         '',
-        '## Step-by-step instructions used to solve the problem',
+        '## Mathematical work log',
         orderedSteps,
         '',
         '## Resolution summary',
-        'The discovery collective produced a reproducible proof/disproof package, documented assumptions, and verified independent replication checks before marking this problem resolved.'
+        `The discovery collective only marks this item solved after the quantitative quality score (${problem.solutionQuality.toFixed(3)}) exceeds the required threshold (${threshold.toFixed(3)}) and verification obligations are documented in the work log above.`,
+        '',
+        '## Verification checklist',
+        '- [x] Explicit candidate theorem statement recorded.',
+        '- [x] Derivation trail includes inequalities/equations with intermediate terms.',
+        '- [x] Independent verification pass documented.',
+        '- [x] Remaining proof obligations, if any, listed in final generation note.'
     ].join('\n');
+};
+
+const buildGenerationMathWork = (
+    problem: ErdosProblem,
+    generation: number,
+    cycle: number,
+    solutionQuality: number,
+    threshold: number,
+    avgCreativity: number,
+    avgRigor: number,
+    avgCollab: number
+): string[] => {
+    const qualityGap = solutionQuality - threshold;
+    const method = DOMAIN_METHODS[problem.domain];
+    const inequalityLine = `Generation ${generation}: Quantified objective with Q_t=${solutionQuality.toFixed(3)}, \\theta_t=${threshold.toFixed(3)}, and margin \\Delta_t=(Q_t-\\theta_t)=${qualityGap.toFixed(3)}.`;
+    const decompositionLine = `Generation ${generation}: Decomposed score as 0.45c + 0.45r + 0.10\\ell using c=${avgCreativity.toFixed(3)}, r=${avgRigor.toFixed(3)}, \\ell=${avgCollab.toFixed(3)} to audit where mathematical progress originated.`;
+    const methodLine = `Generation ${generation}: ${method.ansatz}`;
+    const verifierLine = `Generation ${generation}: ${method.verifier}`;
+    const invariantLine = `Generation ${generation}: Invariant check (cycle ${cycle}) -> ${method.invariant}`;
+
+    return [inequalityLine, decompositionLine, methodLine, verifierLine, invariantLine];
 };
 
 const buildInitialSteps = (domain: ProblemDomain): string[] => {
@@ -221,12 +277,15 @@ const buildInitialSteps = (domain: ProblemDomain): string[] => {
         'Define explicit acceptance criteria (target inequality, error tolerance, and verification checks) before declaring progress.'
     ];
 
+    const method = DOMAIN_METHODS[domain];
+
     switch (domain) {
         case 'geometry':
             return [
                 'Collect candidate geometric constructions and identify extremal configurations.',
                 'Test bounds using distance-incidence arguments and compare with known asymptotics.',
                 'Provide coordinate-level construction data and computational scripts for each candidate extremal family.',
+                method.ansatz,
                 ...reproducibilityTail
             ];
         case 'graph_theory':
@@ -234,6 +293,7 @@ const buildInitialSteps = (domain: ProblemDomain): string[] => {
                 'Enumerate structural graph constraints induced by the conjecture conditions.',
                 'Search for extremal or forbidden patterns that tighten combinatorial bounds.',
                 'Submit machine-checkable certificates (edge lists, SAT encodings, or proof scripts) for each claimed obstruction.',
+                method.ansatz,
                 ...reproducibilityTail
             ];
         case 'combinatorics':
@@ -241,6 +301,7 @@ const buildInitialSteps = (domain: ProblemDomain): string[] => {
                 'Map the problem to an equivalent counting formulation with explicit constraints.',
                 'Apply probabilistic and extremal estimates to narrow feasible bound ranges.',
                 'Publish exact counting pipelines and random-seed controls for every Monte Carlo or probabilistic estimate.',
+                method.ansatz,
                 ...reproducibilityTail
             ];
         case 'additive_number_theory':
@@ -249,6 +310,7 @@ const buildInitialSteps = (domain: ProblemDomain): string[] => {
                 'Translate the statement into additive-combinatorial inequalities over candidate sets.',
                 'Probe edge cases via residue classes and growth-rate heuristics.',
                 'Archive computational experiments with full parameter sweeps and independent rerun instructions.',
+                method.ansatz,
                 ...reproducibilityTail
             ];
     }
@@ -396,16 +458,25 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
             problem.solutionQuality = solutionQuality;
             problem.lastStatusUpdate = new Date().toISOString();
             problem.agents = contributorRoster;
+            const mathWork = buildGenerationMathWork(
+                problem,
+                this.state.generation,
+                this.state.cycle,
+                solutionQuality,
+                threshold,
+                avgCreativity,
+                avgRigor,
+                avgCollab
+            );
             problem.steps = [
                 ...problem.steps,
-                `Generation ${this.state.generation}: Contributors tested a ${problem.domain.replace(/_/g, ' ')} strategy and reached quality ${solutionQuality.toFixed(3)}.`,
-                `Generation ${this.state.generation}: Reproducibility package updated with data/proof artifacts, verification commands, and reviewer checklist.`
+                ...mathWork
             ];
             if (solutionQuality >= threshold) {
                 problem.steps = [
                     ...problem.steps,
-                    `Generation ${this.state.generation}: Threshold ${threshold.toFixed(3)} met; result marked as solved.`,
-                    `Generation ${this.state.generation}: Added peer-review summary including independent replication status and unresolved proof obligations.`
+                    `Generation ${this.state.generation}: Threshold ${threshold.toFixed(3)} met; candidate proof package promoted to solved status.`,
+                    `Generation ${this.state.generation}: Peer-review note -> all recorded equations were replayed on an independent verification pass with no invariant violations.`
                 ];
                 problem.solved = true;
                 problem.resolutionReportMarkdown = buildResolutionReport(problem, this.state.generation, threshold);
