@@ -168,27 +168,40 @@ const buildCopyAction = (problem: ErdosProblem): string => {
 };
 
 const buildInitialSteps = (domain: ProblemDomain): string[] => {
+    const reproducibilityTail = [
+        'Record all assumptions, notation, and known lemmas with exact references so another team can reproduce the same starting state.',
+        'Define explicit acceptance criteria (target inequality, error tolerance, and verification checks) before declaring progress.'
+    ];
+
     switch (domain) {
         case 'geometry':
             return [
                 'Collect candidate geometric constructions and identify extremal configurations.',
-                'Test bounds using distance-incidence arguments and compare with known asymptotics.'
+                'Test bounds using distance-incidence arguments and compare with known asymptotics.',
+                'Provide coordinate-level construction data and computational scripts for each candidate extremal family.',
+                ...reproducibilityTail
             ];
         case 'graph_theory':
             return [
                 'Enumerate structural graph constraints induced by the conjecture conditions.',
-                'Search for extremal or forbidden patterns that tighten combinatorial bounds.'
+                'Search for extremal or forbidden patterns that tighten combinatorial bounds.',
+                'Submit machine-checkable certificates (edge lists, SAT encodings, or proof scripts) for each claimed obstruction.',
+                ...reproducibilityTail
             ];
         case 'combinatorics':
             return [
                 'Map the problem to an equivalent counting formulation with explicit constraints.',
-                'Apply probabilistic and extremal estimates to narrow feasible bound ranges.'
+                'Apply probabilistic and extremal estimates to narrow feasible bound ranges.',
+                'Publish exact counting pipelines and random-seed controls for every Monte Carlo or probabilistic estimate.',
+                ...reproducibilityTail
             ];
         case 'additive_number_theory':
         default:
             return [
                 'Translate the statement into additive-combinatorial inequalities over candidate sets.',
-                'Probe edge cases via residue classes and growth-rate heuristics.'
+                'Probe edge cases via residue classes and growth-rate heuristics.',
+                'Archive computational experiments with full parameter sweeps and independent rerun instructions.',
+                ...reproducibilityTail
             ];
     }
 };
@@ -337,12 +350,14 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
             problem.agents = contributorRoster;
             problem.steps = [
                 ...problem.steps,
-                `Generation ${this.state.generation}: Contributors tested a ${problem.domain.replace(/_/g, ' ')} strategy and reached quality ${solutionQuality.toFixed(3)}.`
+                `Generation ${this.state.generation}: Contributors tested a ${problem.domain.replace(/_/g, ' ')} strategy and reached quality ${solutionQuality.toFixed(3)}.`,
+                `Generation ${this.state.generation}: Reproducibility package updated with data/proof artifacts, verification commands, and reviewer checklist.`
             ];
             if (solutionQuality >= threshold) {
                 problem.steps = [
                     ...problem.steps,
-                    `Generation ${this.state.generation}: Threshold ${threshold.toFixed(3)} met; result marked as solved.`
+                    `Generation ${this.state.generation}: Threshold ${threshold.toFixed(3)} met; result marked as solved.`,
+                    `Generation ${this.state.generation}: Added peer-review summary including independent replication status and unresolved proof obligations.`
                 ];
                 problem.solved = true;
                 newlySolved += 1;
@@ -369,7 +384,11 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
 
         const solvedThisRound = this.state.activeProblems.filter(problem => problem.solved);
         if (solvedThisRound.length > 0) {
-            this.state.solvedProblems.push(...solvedThisRound);
+            const solvedById = new Map(this.state.solvedProblems.map(problem => [problem.id, problem] as const));
+            solvedThisRound.forEach(problem => {
+                solvedById.set(problem.id, problem);
+            });
+            this.state.solvedProblems = Array.from(solvedById.values());
         }
         this.state.activeProblems = this.state.activeProblems.filter(problem => !problem.solved);
 
@@ -481,6 +500,21 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
         if (this.state.activeProblems.length > 1) {
             this.state.activeProblems = [this.state.activeProblems[0]];
         }
+
+        const solvedById = new Map<string, ErdosProblem>();
+        (Array.isArray(this.state.solvedProblems) ? this.state.solvedProblems : []).forEach(problem => {
+            const existing = solvedById.get(problem.id);
+            if (!existing) {
+                solvedById.set(problem.id, problem);
+                return;
+            }
+            const existingTimestamp = Date.parse(existing.lastStatusUpdate || '');
+            const incomingTimestamp = Date.parse(problem.lastStatusUpdate || '');
+            if (incomingTimestamp >= existingTimestamp) {
+                solvedById.set(problem.id, problem);
+            }
+        });
+        this.state.solvedProblems = Array.from(solvedById.values());
     }
 
     public getEvents(): ScenarioEvent[] {

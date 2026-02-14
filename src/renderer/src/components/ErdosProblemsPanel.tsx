@@ -67,6 +67,8 @@ const panelStyle: React.CSSProperties = {
     gap: '10px'
 };
 
+const ERDOS_KNOWN_TOTAL = 1179;
+
 const ErdosProblemsPanel: React.FC = () => {
     const getErdosProblemsForDashboard = useSimulationStore(state => state.getErdosProblemsForDashboard);
     const generation = useSimulationStore(state => state.currentState.generation);
@@ -91,10 +93,12 @@ const ErdosProblemsPanel: React.FC = () => {
         <div style={panelStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong style={{ fontSize: '0.9rem' }}>Erdos Problem Dashboard</strong>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{problems.filter(p => p.status === 'in progress').length} active / {problems.length} listed</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                    {problems.filter(p => p.status === 'in progress').length} active / {problems.length} tracked / {ERDOS_KNOWN_TOTAL} known total
+                </span>
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                Catalog source: <code>teorth/erdosproblems</code>. Generations represent iterative proof-search cycles; after all listed problems are solved, the scenario starts a new verification cycle to refine rigor and reproducibility.
+                Catalog source: <code>teorth/erdosproblems</code>. The dashboard deduplicates by problem id per cycle to avoid repeated solved entries inflating totals. Generations represent iterative proof-search cycles; after all tracked problems are solved, the scenario starts a new verification cycle to refine rigor and reproducibility.
             </div>
 
             {problems.length === 0 ? (
