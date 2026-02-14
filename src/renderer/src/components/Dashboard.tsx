@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 import MetricsChart from './MetricsChart';
 import StateGauges from './StateGauges';
@@ -10,8 +10,9 @@ import ValidationPanel from './ValidationPanel';
 import { AIControlPanel } from './AIControlPanel';
 import InterventionLogPanel from './InterventionLogPanel';
 import AgencyLog from './AgencyLog';
+import ErdosProblemsPanel from './ErdosProblemsPanel';
 
-type TabType = 'main' | 'logs';
+type TabType = 'main' | 'logs' | 'erdos';
 
 const Dashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabType>('main');
@@ -22,6 +23,12 @@ const Dashboard: React.FC = () => {
         scenarioMetadata,
         switchScenario
     } = useSimulationStore();
+
+    useEffect(() => {
+        if (currentScenarioId !== 'erdos' && activeTab === 'erdos') {
+            setActiveTab('main');
+        }
+    }, [activeTab, currentScenarioId]);
 
     const tabButtonStyle = (isActive: boolean) => ({
         background: isActive ? 'var(--color-primary)' : 'transparent',
@@ -90,6 +97,14 @@ const Dashboard: React.FC = () => {
                     >
                         LOGS
                     </button>
+                    {currentScenarioId === 'erdos' && (
+                        <button
+                            onClick={() => setActiveTab('erdos')}
+                            style={tabButtonStyle(activeTab === 'erdos')}
+                        >
+                            ERDOS
+                        </button>
+                    )}
                 </div>
 
                 {/* Main Tab Content */}
@@ -108,6 +123,10 @@ const Dashboard: React.FC = () => {
                         <AgencyLog />
                         <ValidationPanel />
                     </>
+                )}
+
+                {activeTab === 'erdos' && currentScenarioId === 'erdos' && (
+                    <ErdosProblemsPanel />
                 )}
             </div>
 
