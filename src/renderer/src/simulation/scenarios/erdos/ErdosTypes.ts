@@ -3,11 +3,16 @@ export type ProblemDomain = 'additive_number_theory' | 'combinatorics' | 'graph_
 export interface ErdosProblem {
     id: string;
     title: string;
+    description: string;
     domain: ProblemDomain;
     difficulty: number; // 0-1
     reward: number;
     solved: boolean;
     solutionQuality: number;
+    lastStatusUpdate: string;
+    steps: string[];
+    agents: Array<{ name: string; id: string }>;
+    copyAction: string;
 }
 
 export interface DiscoveryAgent {

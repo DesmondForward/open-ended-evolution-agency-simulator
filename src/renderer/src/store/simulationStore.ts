@@ -27,7 +27,7 @@ import { DEFAULT_MATH_CONFIG, MathConfig } from '../simulation/scenarios/math/Ma
 import { DEFAULT_ALIGNMENT_CONFIG, AlignmentConfig } from '../simulation/scenarios/alignment/AlignmentTypes';
 import { DEFAULT_BIO_CONFIG, BioConfig } from '../simulation/scenarios/bio/BioTypes';
 import { DEFAULT_AGENT_CONFIG, AgentConfig } from '../simulation/scenarios/agents/AgentTypes';
-import { DEFAULT_ERDOS_CONFIG, ErdosConfig } from '../simulation/scenarios/erdos/ErdosTypes';
+import { DEFAULT_ERDOS_CONFIG, ErdosConfig, ErdosProblem } from '../simulation/scenarios/erdos/ErdosTypes';
 import { createSnapshot, parseSnapshot, SnapshotData } from '../simulation/snapshot';
 import { ErdosScenario } from '../simulation/scenarios/erdos/ErdosScenario';
 
@@ -89,6 +89,16 @@ interface SimulationStore {
     loadAgents: () => Promise<void>;
     exportState: () => string;
     importState: (json: string) => boolean;
+    getErdosProblemsForDashboard: () => Array<{
+        id: string;
+        title: string;
+        description: string;
+        status: 'in progress' | 'solved';
+        timestamp: string;
+        steps: string[];
+        agents: Array<{ name: string; id: string }>;
+        copy_action: string;
+    }>;
 }
 
 // Max telemetry points to keep in memory for charting
@@ -235,6 +245,37 @@ const extractGenome = (legacy: LegacyAgent, scenarioType: ScenarioMetadata['type
         };
     }
     return undefined;
+};
+
+
+const toDashboardProblem = (problem: ErdosProblem) => {
+    const status: 'in progress' | 'solved' = problem.solved ? 'solved' : 'in progress';
+    const timestamp = typeof problem.lastStatusUpdate === 'string' && problem.lastStatusUpdate.length > 0
+        ? problem.lastStatusUpdate
+        : new Date(0).toISOString();
+    const steps = Array.isArray(problem.steps) ? problem.steps : [];
+    const agents = Array.isArray(problem.agents)
+        ? problem.agents
+            .filter((agent): agent is { name: string; id: string } => Boolean(agent && typeof agent.name === 'string' && typeof agent.id === 'string'))
+        : [];
+    const fallbackCopy = [
+        `**Problem:** ${problem.title}`,
+        `**Description:** ${problem.description}`,
+        `**Status:** ${status === 'solved' ? 'Solved' : 'In progress'}`,
+        '**Steps:**',
+        steps.length ? steps.map((step, index) => `${index + 1}. ${step}`).join('\n') : '1. No step trace available yet.'
+    ].join('\n');
+
+    return {
+        id: problem.id,
+        title: problem.title,
+        description: problem.description,
+        status,
+        timestamp,
+        steps,
+        agents,
+        copy_action: problem.copyAction || fallbackCopy
+    };
 };
 
 const summarizeScenarioState = (scenarioId: string, state: any) => {
@@ -960,6 +1001,27 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 triggerAI();
             }
         }
+    },
+
+    getErdosProblemsForDashboard: () => {
+        const scenarioState = scenarios.erdos?.getState ? scenarios.erdos.getState() : null;
+        if (!scenarioState) return [];
+
+        const allProblems = [
+            ...(Array.isArray(scenarioState.activeProblems) ? scenarioState.activeProblems : []),
+            ...(Array.isArray(scenarioState.solvedProblems) ? scenarioState.solvedProblems : [])
+        ] as ErdosProblem[];
+
+        if (allProblems.length === 0) return [];
+
+        return allProblems
+            .map(toDashboardProblem)
+            .sort((a, b) => {
+                if (a.status !== b.status) {
+                    return a.status === 'in progress' ? -1 : 1;
+                }
+                return Date.parse(b.timestamp) - Date.parse(a.timestamp);
+            });
     },
 
     loadAgents: async () => {
