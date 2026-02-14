@@ -52,6 +52,7 @@ export interface ErdosMetrics {
 
 export interface ErdosState {
     generation: number;
+    cycle: number;
     nextProblemIndex: number;
     agents: DiscoveryAgent[];
     activeProblems: ErdosProblem[];

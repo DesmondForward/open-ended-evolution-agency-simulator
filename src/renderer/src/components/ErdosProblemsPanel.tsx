@@ -71,12 +71,16 @@ const ErdosProblemsPanel: React.FC = () => {
     const getErdosProblemsForDashboard = useSimulationStore(state => state.getErdosProblemsForDashboard);
     const currentScenarioId = useSimulationStore(state => state.currentScenarioId);
     const generation = useSimulationStore(state => state.currentState.generation);
+    const cycle = useSimulationStore(state => {
+        const scenarioState = state.scenarios.erdos?.getState ? state.scenarios.erdos.getState() : null;
+        return scenarioState?.cycle ?? 1;
+    });
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const problems = useMemo<ErdosDashboardProblem[]>(() => {
         if (currentScenarioId !== 'erdos') return [];
         return getErdosProblemsForDashboard();
-    }, [currentScenarioId, generation, getErdosProblemsForDashboard]);
+    }, [currentScenarioId, generation, getErdosProblemsForDashboard, cycle]);
 
     const handleCopy = async (problem: ErdosDashboardProblem) => {
         try {
@@ -92,7 +96,10 @@ const ErdosProblemsPanel: React.FC = () => {
         <div style={panelStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong style={{ fontSize: '0.9rem' }}>Erdos Problem Dashboard</strong>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{problems.length} active problem</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{problems.filter(p => p.status === 'in progress').length} active / {problems.length} listed</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                Catalog source: <code>teorth/erdosproblems</code>. Generations represent iterative proof-search cycles; after all listed problems are solved, the scenario starts a new verification cycle to refine rigor and reproducibility.
             </div>
 
             {problems.length === 0 ? (
@@ -121,7 +128,7 @@ const ErdosProblemsPanel: React.FC = () => {
                             )}
 
                             <div style={{ fontSize: '0.76rem', color: 'var(--color-text-secondary)' }}>
-                                Agents proceed in chronological order and work one open problem at a time. Current generation: <InlineMath math={`t=${generation}`} />
+                                Agents proceed in chronological order and work one open problem at a time. Current generation: <InlineMath math={`t=${generation}`} /> in cycle <InlineMath math={`c=${cycle}`} />
                             </div>
 
                             <div>
