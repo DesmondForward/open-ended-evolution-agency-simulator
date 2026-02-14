@@ -152,6 +152,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     private getEmptyState(): ErdosState {
         return {
             generation: 0,
+            nextProblemIndex: 0,
             agents: [],
             activeProblems: [],
             solvedProblems: [],
@@ -181,22 +182,25 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     }
 
     private reseedProblems() {
+        if (this.state.activeProblems.length > 0 || this.state.nextProblemIndex >= PROBLEM_BANK.length) {
+            return;
+        }
+
         const now = new Date().toISOString();
-        const shuffled = [...PROBLEM_BANK].sort(() => this.prng.next() - 0.5);
-        const take = Math.min(this.config.problemsPerGeneration, shuffled.length);
-        this.state.activeProblems = shuffled.slice(0, take).map(problem => {
-            const seededProblem: ErdosProblem = {
-                ...problem,
-                solved: false,
-                solutionQuality: 0,
-                lastStatusUpdate: now,
-                steps: buildInitialSteps(problem.domain),
-                agents: [],
-                copyAction: ''
-            };
-            seededProblem.copyAction = buildCopyAction(seededProblem);
-            return seededProblem;
-        });
+        const nextProblem = PROBLEM_BANK[this.state.nextProblemIndex];
+        const seededProblem: ErdosProblem = {
+            ...nextProblem,
+            solved: false,
+            solutionQuality: 0,
+            lastStatusUpdate: now,
+            steps: buildInitialSteps(nextProblem.domain),
+            agents: [],
+            copyAction: ''
+        };
+        seededProblem.copyAction = buildCopyAction(seededProblem);
+
+        this.state.activeProblems = [seededProblem];
+        this.state.nextProblemIndex += 1;
     }
 
     public initialize(seed: number, config?: ErdosConfig): void {
@@ -214,7 +218,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     public updateConfig(config: Partial<ErdosConfig>): void {
         const next = { ...this.config, ...config };
         next.populationSize = Math.max(1, Math.floor(next.populationSize));
-        next.problemsPerGeneration = Math.max(1, Math.floor(next.problemsPerGeneration));
+        next.problemsPerGeneration = 1;
         next.mutationRate = Math.max(0, Math.min(1, next.mutationRate));
         next.collaborationBoost = Math.max(0, Math.min(1, next.collaborationBoost));
         this.config = next;
@@ -355,7 +359,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
             });
         }
 
-        if (this.state.activeProblems.length < Math.ceil(this.config.problemsPerGeneration / 2)) {
+        if (this.state.activeProblems.length === 0) {
             this.reseedProblems();
         }
     }
@@ -380,7 +384,24 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     }
 
     public deserialize(state: string): void {
-        this.state = JSON.parse(state) as ErdosState;
+        const parsed = JSON.parse(state) as Partial<ErdosState>;
+        this.state = {
+            ...this.getEmptyState(),
+            ...parsed,
+            nextProblemIndex: typeof parsed.nextProblemIndex === 'number'
+                ? Math.max(0, Math.floor(parsed.nextProblemIndex))
+                : Array.isArray(parsed.solvedProblems)
+                    ? parsed.solvedProblems.length
+                    : 0
+        };
+
+        if (!Array.isArray(this.state.activeProblems)) {
+            this.state.activeProblems = [];
+        }
+
+        if (this.state.activeProblems.length > 1) {
+            this.state.activeProblems = [this.state.activeProblems[0]];
+        }
     }
 
     public getEvents(): ScenarioEvent[] {

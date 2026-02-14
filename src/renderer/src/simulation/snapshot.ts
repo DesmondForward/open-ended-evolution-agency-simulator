@@ -140,7 +140,7 @@ const sanitizeErdosConfig = (value: unknown): ErdosConfig => {
     if (!isRecord(value)) return { ...DEFAULT_ERDOS_CONFIG };
     return {
         populationSize: isFiniteNumber(value.populationSize) ? Math.max(1, Math.floor(value.populationSize)) : DEFAULT_ERDOS_CONFIG.populationSize,
-        problemsPerGeneration: isFiniteNumber(value.problemsPerGeneration) ? Math.max(1, Math.floor(value.problemsPerGeneration)) : DEFAULT_ERDOS_CONFIG.problemsPerGeneration,
+        problemsPerGeneration: 1,
         mutationRate: isFiniteNumber(value.mutationRate) ? clamp01(value.mutationRate) : DEFAULT_ERDOS_CONFIG.mutationRate,
         collaborationBoost: isFiniteNumber(value.collaborationBoost) ? clamp01(value.collaborationBoost) : DEFAULT_ERDOS_CONFIG.collaborationBoost
     };
