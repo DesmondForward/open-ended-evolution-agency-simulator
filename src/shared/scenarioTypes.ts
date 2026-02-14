@@ -1,1 +1,1 @@
-export type ScenarioType = 'sde' | 'math' | 'alignment' | 'bio' | 'agents';
+export type ScenarioType = 'sde' | 'math' | 'alignment' | 'bio' | 'agents' | 'erdos';

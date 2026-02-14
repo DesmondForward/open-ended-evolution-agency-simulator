@@ -27,7 +27,9 @@ import { DEFAULT_MATH_CONFIG, MathConfig } from '../simulation/scenarios/math/Ma
 import { DEFAULT_ALIGNMENT_CONFIG, AlignmentConfig } from '../simulation/scenarios/alignment/AlignmentTypes';
 import { DEFAULT_BIO_CONFIG, BioConfig } from '../simulation/scenarios/bio/BioTypes';
 import { DEFAULT_AGENT_CONFIG, AgentConfig } from '../simulation/scenarios/agents/AgentTypes';
+import { DEFAULT_ERDOS_CONFIG, ErdosConfig } from '../simulation/scenarios/erdos/ErdosTypes';
 import { createSnapshot, parseSnapshot, SnapshotData } from '../simulation/snapshot';
+import { ErdosScenario } from '../simulation/scenarios/erdos/ErdosScenario';
 
 interface SimulationStore {
     // State
@@ -50,6 +52,7 @@ interface SimulationStore {
         alignment: AlignmentConfig;
         bio: BioConfig;
         agents: AgentConfig;
+        erdos: ErdosConfig;
     };
 
     // Agent Library
@@ -78,7 +81,7 @@ interface SimulationStore {
     reset: () => void;
     setControl: (U: number) => void;
     updateParameters: (params: Partial<SimulationParameters>) => void;
-    updateScenarioConfig: (config: Partial<MathConfig | AlignmentConfig | BioConfig | AgentConfig>) => void;
+    updateScenarioConfig: (config: Partial<MathConfig | AlignmentConfig | BioConfig | AgentConfig | ErdosConfig>) => void;
     switchScenario: (id: string) => void;
     loadBestParameters: () => void;
     triggerAI: () => Promise<void>;
@@ -98,13 +101,15 @@ const mathScenario = new MathScenario();
 const alignmentScenario = new AlignmentScenario();
 const bioScenario = new BioScenario();
 const agentsScenario = new AgentsScenario();
+const erdosScenario = new ErdosScenario();
 
 const scenarios: Record<string, any> = {
     'sde-v1': sdeScenario,
     'math': mathScenario,
     'alignment': alignmentScenario,
     'bio': bioScenario,
-    'agents': agentsScenario
+    'agents': agentsScenario,
+    'erdos': erdosScenario
 };
 
 const getScenarioConfigForId = (
@@ -121,6 +126,8 @@ const getScenarioConfigForId = (
             return configs.bio;
         case 'agents':
             return configs.agents;
+        case 'erdos':
+            return configs.erdos;
         case 'sde-v1':
         default:
             return parameters;
@@ -266,6 +273,14 @@ const summarizeScenarioState = (scenarioId: string, state: any) => {
                 generation: state.generation,
                 populationSize: Array.isArray(state.agents) ? state.agents.length : 0,
                 taskCount: Array.isArray(state.currentTasks) ? state.currentTasks.length : 0,
+                metrics: state.metrics
+            };
+        case 'erdos':
+            return {
+                generation: state.generation,
+                populationSize: Array.isArray(state.agents) ? state.agents.length : 0,
+                activeProblems: Array.isArray(state.activeProblems) ? state.activeProblems.length : 0,
+                solvedProblems: Array.isArray(state.solvedProblems) ? state.solvedProblems.length : 0,
                 metrics: state.metrics
             };
         default:
@@ -441,6 +456,14 @@ const sanitizeAgentConfig = (config: AgentConfig): AgentConfig => ({
     driftRate: clamp01(config.driftRate)
 });
 
+
+const sanitizeErdosConfig = (config: ErdosConfig): ErdosConfig => ({
+    populationSize: Math.max(1, Math.floor(config.populationSize)),
+    problemsPerGeneration: Math.max(1, Math.floor(config.problemsPerGeneration)),
+    mutationRate: clamp01(config.mutationRate),
+    collaborationBoost: clamp01(config.collaborationBoost)
+});
+
 // Initialize Runner
 const runner = new ScenarioRunner({
     onTelemetry: (data) => {
@@ -498,13 +521,15 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         mathScenario.metadata,
         alignmentScenario.metadata,
         bioScenario.metadata,
-        agentsScenario.metadata
+        agentsScenario.metadata,
+        erdosScenario.metadata
     ],
     scenarioConfigs: {
         math: { ...DEFAULT_MATH_CONFIG },
         alignment: { ...DEFAULT_ALIGNMENT_CONFIG },
         bio: { ...DEFAULT_BIO_CONFIG },
-        agents: { ...DEFAULT_AGENT_CONFIG }
+        agents: { ...DEFAULT_AGENT_CONFIG },
+        erdos: { ...DEFAULT_ERDOS_CONFIG }
     },
 
     savedAgents: [],
@@ -610,6 +635,8 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             updatedConfigs.bio = sanitizeBioConfig({ ...updatedConfigs.bio, ...(config as Partial<BioConfig>) });
         } else if (currentId === 'agents') {
             updatedConfigs.agents = sanitizeAgentConfig({ ...updatedConfigs.agents, ...(config as Partial<AgentConfig>) });
+        } else if (currentId === 'erdos') {
+            updatedConfigs.erdos = sanitizeErdosConfig({ ...updatedConfigs.erdos, ...(config as Partial<ErdosConfig>) });
         }
 
         if (scenario.updateConfig) {
@@ -888,6 +915,9 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                     } else if (scenarioMetadata.type === 'agents') {
                         updatedConfigs.agents = sanitizeAgentConfig({ ...updatedConfigs.agents, ...updatePayload });
                         currentScenario.updateConfig(updatedConfigs.agents);
+                    } else if (scenarioMetadata.type === 'erdos') {
+                        updatedConfigs.erdos = sanitizeErdosConfig({ ...updatedConfigs.erdos, ...updatePayload });
+                        currentScenario.updateConfig(updatedConfigs.erdos);
                     }
                     set({ scenarioConfigs: updatedConfigs });
                 }

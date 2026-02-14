@@ -12,6 +12,7 @@ import { DEFAULT_MATH_CONFIG, MathConfig } from './scenarios/math/MathTypes';
 import { DEFAULT_ALIGNMENT_CONFIG, AlignmentConfig } from './scenarios/alignment/AlignmentTypes';
 import { DEFAULT_BIO_CONFIG, BioConfig } from './scenarios/bio/BioTypes';
 import { DEFAULT_AGENT_CONFIG, AgentConfig } from './scenarios/agents/AgentTypes';
+import { DEFAULT_ERDOS_CONFIG, ErdosConfig } from './scenarios/erdos/ErdosTypes';
 
 export const SNAPSHOT_VERSION = '2.1.0';
 
@@ -27,6 +28,7 @@ export interface SnapshotStore {
         alignment: AlignmentConfig;
         bio: BioConfig;
         agents: AgentConfig;
+        erdos: ErdosConfig;
     };
 }
 
@@ -42,7 +44,7 @@ export interface SnapshotData {
     scenarioData: string;
 }
 
-const KNOWN_SCENARIOS = new Set(['sde-v1', 'math', 'alignment', 'bio', 'agents']);
+const KNOWN_SCENARIOS = new Set(['sde-v1', 'math', 'alignment', 'bio', 'agents', 'erdos']);
 
 export const normalizeScenarioId = (value: unknown): string => {
     if (typeof value === 'string' && KNOWN_SCENARIOS.has(value)) {
@@ -133,20 +135,33 @@ const sanitizeAgentConfig = (value: unknown): AgentConfig => {
     };
 };
 
+
+const sanitizeErdosConfig = (value: unknown): ErdosConfig => {
+    if (!isRecord(value)) return { ...DEFAULT_ERDOS_CONFIG };
+    return {
+        populationSize: isFiniteNumber(value.populationSize) ? Math.max(1, Math.floor(value.populationSize)) : DEFAULT_ERDOS_CONFIG.populationSize,
+        problemsPerGeneration: isFiniteNumber(value.problemsPerGeneration) ? Math.max(1, Math.floor(value.problemsPerGeneration)) : DEFAULT_ERDOS_CONFIG.problemsPerGeneration,
+        mutationRate: isFiniteNumber(value.mutationRate) ? clamp01(value.mutationRate) : DEFAULT_ERDOS_CONFIG.mutationRate,
+        collaborationBoost: isFiniteNumber(value.collaborationBoost) ? clamp01(value.collaborationBoost) : DEFAULT_ERDOS_CONFIG.collaborationBoost
+    };
+};
+
 const sanitizeScenarioConfigs = (value: unknown): SnapshotStore['scenarioConfigs'] => {
     if (!isRecord(value)) {
         return {
             math: { ...DEFAULT_MATH_CONFIG },
             alignment: { ...DEFAULT_ALIGNMENT_CONFIG },
             bio: { ...DEFAULT_BIO_CONFIG },
-            agents: { ...DEFAULT_AGENT_CONFIG }
+            agents: { ...DEFAULT_AGENT_CONFIG },
+            erdos: { ...DEFAULT_ERDOS_CONFIG }
         };
     }
     return {
         math: sanitizeMathConfig(value.math),
         alignment: sanitizeAlignmentConfig(value.alignment),
         bio: sanitizeBioConfig(value.bio),
-        agents: sanitizeAgentConfig(value.agents)
+        agents: sanitizeAgentConfig(value.agents),
+        erdos: sanitizeErdosConfig(value.erdos)
     };
 };
 

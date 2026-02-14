@@ -208,7 +208,7 @@ export interface ScenarioMetadata {
     name: string;
     description: string;
     version: string;
-    type: 'sde' | 'math' | 'alignment' | 'bio' | 'agents';
+    type: 'sde' | 'math' | 'alignment' | 'bio' | 'agents' | 'erdos';
 }
 
 /**
