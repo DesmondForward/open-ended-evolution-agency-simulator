@@ -176,6 +176,47 @@ const downsampleTelemetry = (points: TelemetryPoint[], maxPoints: number) => {
     return sampled.slice(0, maxPoints);
 };
 
+type ResearchCadenceProfile = {
+    early: number;
+    mid: number;
+    late: number;
+    midStart: number;
+    lateStart: number;
+};
+
+const AI_RESEARCH_CADENCE: Record<ScenarioMetadata['type'], ResearchCadenceProfile> = {
+    sde: { early: 10, mid: 20, late: 30, midStart: 120, lateStart: 360 },
+    math: { early: 5, mid: 10, late: 16, midStart: 80, lateStart: 240 },
+    alignment: { early: 4, mid: 8, late: 12, midStart: 60, lateStart: 180 },
+    bio: { early: 6, mid: 12, late: 20, midStart: 100, lateStart: 280 },
+    agents: { early: 6, mid: 12, late: 18, midStart: 90, lateStart: 260 },
+    erdos: { early: 3, mid: 6, late: 10, midStart: 50, lateStart: 160 }
+};
+
+const getResearchCadenceGenerations = (type: ScenarioMetadata['type'], generation: number) => {
+    const profile = AI_RESEARCH_CADENCE[type];
+    if (generation >= profile.lateStart) return profile.late;
+    if (generation >= profile.midStart) return profile.mid;
+    return profile.early;
+};
+
+const reconcileLatestOutcome = (history: AIHistoryEntry[], currentAgency: number): AIHistoryEntry[] => {
+    if (history.length === 0) return history;
+    const updated = [...history];
+    const lastIndex = updated.length - 1;
+    const last = updated[lastIndex];
+    const aBefore = ensureNumber(last.outcome?.A_before, currentAgency);
+    updated[lastIndex] = {
+        ...last,
+        outcome: {
+            A_before: aBefore,
+            A_after: currentAgency,
+            delta_A: currentAgency - aBefore
+        }
+    };
+    return updated;
+};
+
 const buildBehaviorTrace = (telemetry: TelemetryPoint[]) => {
     if (!telemetry.length) {
         return { summary: 'No telemetry captured for this emergence window.' };
@@ -870,13 +911,15 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
 
         set({ aiStatus: 'thinking' });
 
+        const historyWithOutcomes = reconcileLatestOutcome(aiHistory, currentState.A);
+
         // Call AI Service
         const decision = await fetchAIControl(
             currentState,
             parameters,
             control,
             scenarioMetadata,
-            aiHistory,
+            historyWithOutcomes,
             bestAgency,
             bestControl,
             savedAgents
@@ -928,7 +971,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 aiReasoning: decision.reasoning,
                 lastAiUpdate: new Date(),
                 aiStatus: 'idle',
-                aiHistory: [...aiHistory, newHistoryEntry],
+                aiHistory: [...historyWithOutcomes, newHistoryEntry],
                 interventionLog: newInterventionLog
             });
 
@@ -989,14 +1032,18 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
 
     step: async () => {
         // This is now mostly for AI triggering since the Runner handles the physics loop
-        const { isAIControlled, aiStatus, lastAiUpdate, triggerAI } = get();
+        const { isAIControlled, aiStatus, currentState, scenarioMetadata, aiHistory, triggerAI } = get();
 
         if (isAIControlled && aiStatus === 'idle') {
-            const now = Date.now();
-            const lastUpdate = lastAiUpdate ? lastAiUpdate.getTime() : 0;
-            const AI_UPDATE_INTERVAL_MS = 10000; // 10 seconds
+            const requiredGenerationDelta = getResearchCadenceGenerations(
+                scenarioMetadata.type,
+                currentState.generation
+            );
+            const lastInterventionGeneration = aiHistory.length > 0
+                ? aiHistory[aiHistory.length - 1].generation
+                : -Infinity;
 
-            if (now - lastUpdate > AI_UPDATE_INTERVAL_MS) {
+            if ((currentState.generation - lastInterventionGeneration) >= requiredGenerationDelta) {
                 // Trigger AI Analysis
                 triggerAI();
             }

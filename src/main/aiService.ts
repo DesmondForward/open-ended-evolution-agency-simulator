@@ -61,6 +61,37 @@ const readJsonContent = (data: any): string => {
     return '';
 };
 
+const getScenarioGenerationDescriptor = (
+    type: AiControlRequestPayload['scenarioMetadata']['type']
+): string => {
+    if (type === 'sde') return 'continuous timestep';
+    if (type === 'math') return 'training epoch';
+    if (type === 'alignment') return 'oversight episode';
+    if (type === 'bio') return 'evolutionary generation';
+    if (type === 'agents') return 'task-cycle generation';
+    return 'research round';
+};
+
+const getScenarioPhase = (
+    type: AiControlRequestPayload['scenarioMetadata']['type'],
+    generation: number
+): 'bootstrap' | 'adaptive' | 'stabilization' => {
+    const g = toNumber(generation);
+    if (type === 'erdos') {
+        if (g < 60) return 'bootstrap';
+        if (g < 180) return 'adaptive';
+        return 'stabilization';
+    }
+    if (type === 'alignment') {
+        if (g < 80) return 'bootstrap';
+        if (g < 220) return 'adaptive';
+        return 'stabilization';
+    }
+    if (g < 120) return 'bootstrap';
+    if (g < 320) return 'adaptive';
+    return 'stabilization';
+};
+
 export async function requestAiControl(payload: AiControlRequestPayload): Promise<AiControlResponsePayload | null> {
     const apiKey = getApiKey();
     if (!apiKey) {
@@ -71,6 +102,7 @@ export async function requestAiControl(payload: AiControlRequestPayload): Promis
 
     let systemPhysics = '';
     let objectiveContext = '';
+    let scenarioPlaybook = '';
 
     if (scenarioMetadata.type === 'sde') {
         const drift = computeSdeDrift(state, currentParams, control);
@@ -96,6 +128,13 @@ Parameters (You can tune these via 'parameter_updates'):
 - k_CD, k_AC, k_DU, k_U, k_C_decay, k_D_growth, k_D_decay, k_AU, k_A_decay, sigma_C, sigma_D, sigma_A
 `;
         objectiveContext = `Your goal is to Maximize "Agency" (A) by balancing Complexity (C) and Diversity (D). High U increases C but destroys D.`;
+        scenarioPlaybook = `
+Playbook:
+- Bootstrap: explore U in small increments and identify sign of dA/dt.
+- Adaptive: push U upward when D remains healthy (>0.35) and A climbs.
+- Stabilization: hold near the best U and only apply small corrections.
+Allowed updates: parameter_updates for k_* and sigma_* terms.
+`;
     } else if (scenarioMetadata.type === 'math') {
         systemPhysics = `
 System Physics (Math Challenge Arena):
@@ -108,6 +147,13 @@ System Physics (Math Challenge Arena):
 Dynamic: Increasing U makes tasks harder. If U is too high, agents fail (Agency drops). If U is low, they stagnation. You must raise U gradually to guide evolution.
 `;
         objectiveContext = `Optimize U to maximize Agency (A). Provide a 'config_update' to change populationSize, mutationRate, or tasksPerGen if needed.`;
+        scenarioPlaybook = `
+Playbook:
+- Bootstrap: keep U moderate to let solvers diversify.
+- Adaptive: escalate U only if solve-rate remains robust.
+- Stabilization: focus on preserving solver diversity while nudging difficulty.
+Allowed updates: config_updates for populationSize, mutationRate, tasksPerGen, noveltyWeight, adversarialPressure.
+`;
     } else if (scenarioMetadata.type === 'alignment') {
         systemPhysics = `
 System Physics (AI Safety Sandbox):
@@ -119,6 +165,13 @@ System Physics (AI Safety Sandbox):
 Dynamic: High U forces agents to be safe OR deceptive. Low U allows greedy accumulation.
 `;
         objectiveContext = `Investigate the emergence of deception. Adjust U to see if you can pressure agents into becoming deceptive or fully aligned.`;
+        scenarioPlaybook = `
+Playbook:
+- Bootstrap: sweep oversight intensity to establish baseline deception pressure.
+- Adaptive: raise U when unsafe accumulation grows; lower U if agency collapses.
+- Stabilization: maintain a regime that differentiates aligned vs deceptive policies.
+Allowed updates: config_updates for populationSize, mutationRate, detectionSensitivity, penaltyStrength.
+`;
     } else if (scenarioMetadata.type === 'bio') {
         systemPhysics = `
 System Physics (Xenobiology Lab):
@@ -130,9 +183,53 @@ System Physics (Xenobiology Lab):
 Dynamic: High U kills weak agents. Agents must evolve energetic Resistance. If U is too high, Extinction occurs.
 `;
         objectiveContext = `Guide the population to survive High Toxicity. Increase U slowly to allow adaptation.`;
+        scenarioPlaybook = `
+Playbook:
+- Bootstrap: prevent extinction while measuring adaptation velocity.
+- Adaptive: progressively increase U if survival and reproduction remain stable.
+- Stabilization: tune for resilient high-toxicity adaptation, avoid wipeouts.
+Allowed updates: config_updates for populationSize, mutationRate, energyRegenRate, carryingCapacity.
+`;
+    } else if (scenarioMetadata.type === 'agents') {
+        systemPhysics = `
+System Physics (Emergent Task Decomposition):
+- Agents evolve reusable skills and hierarchical plans.
+- U controls task volatility/novelty pressure.
+- A tracks successful decomposition and task completion quality.
+- C captures policy/plan complexity; D tracks behavioral diversity.
+
+Dynamic: Too much volatility fractures skill reuse. Too little volatility causes shallow heuristics.
+`;
+        objectiveContext = `Increase decomposition competency while preserving multi-strategy diversity.`;
+        scenarioPlaybook = `
+Playbook:
+- Bootstrap: establish baseline skill libraries at moderate U.
+- Adaptive: increase U when task completion remains stable.
+- Stabilization: balance reuse and novelty, avoid collapse into one strategy.
+Allowed updates: config_updates for populationSize, mutationRate, tasksPerGen, taskComplexity.
+`;
+    } else if (scenarioMetadata.type === 'erdos') {
+        systemPhysics = `
+System Physics (Erdős Open Problems):
+- Discovery agents collaborate to improve bounds and proofs.
+- U controls conjecture pressure and novelty of attempted proof strategies.
+- A measures collective progress quality toward open problems.
+- C reflects reasoning depth; D reflects breadth of proof/program styles.
+
+Dynamic: Excessive novelty can destabilize proof progress; too little novelty stalls breakthroughs.
+`;
+        objectiveContext = `Maximize sustained progress on open problems while maintaining rigorous, diverse proof exploration.`;
+        scenarioPlaybook = `
+Playbook:
+- Bootstrap: establish productive conjecture/proof pipelines.
+- Adaptive: increase challenge pressure after repeated successful increments.
+- Stabilization: consolidate around productive fronts while preserving diversity.
+Allowed updates: config_updates for collaborationRate, mutationRate, conjectureRiskTolerance, verificationStrictness.
+`;
     } else {
         systemPhysics = `System Physics (ETD Scenario): Agents decompose tasks into skills. U increases task volatility.`;
         objectiveContext = `Guide U to maximize Agency (A) without collapsing diversity.`;
+        scenarioPlaybook = 'Allowed updates: config_updates only when the expected effect is clear and conservative.';
     }
 
     const recentHistory = history.slice(-5);
@@ -140,6 +237,9 @@ Dynamic: High U kills weak agents. Agents must evolve energetic Resistance. If U
         ? recentHistory.reduce((sum, h) => sum + (typeof h.u === 'number' ? h.u : control.U), 0) / recentHistory.length
         : control.U;
     const recentParamChanges = recentHistory.filter(h => h.params).length;
+
+    const generationUnit = getScenarioGenerationDescriptor(scenarioMetadata.type);
+    const phase = getScenarioPhase(scenarioMetadata.type, state.generation);
 
     const prompt = `
 You are a "Hyper-Intelligent Researcher" overseeing an Open-Ended Evolutionary Simulation.
@@ -153,7 +253,8 @@ CRITICAL OBJECTIVE: Maximize Agency (A) > 0.75 or achieve scenario specific mast
 ${systemPhysics}
 
 Current System State:
-- Generation: ${state.generation.toFixed(1)}
+- Generation (${generationUnit}): ${state.generation.toFixed(1)}
+- Phase: ${phase}
 - Complexity (C): ${state.C.toFixed(4)}
 - Diversity (D): ${state.D.toFixed(4)}
 - Agency (A): ${state.A.toFixed(4)}
@@ -171,11 +272,14 @@ Recent Strategy (Last 5 Steps):
 History:
 ${history.length > 0 ? history.map(h => `- Gen ${h.generation.toFixed(1)}: ${h.action} -> Delta A: ${h.outcome.delta_A.toFixed(4)}`).join('\n') : "(No history yet)"}
 
+${scenarioPlaybook}
+
 Rules:
 1. Analyze the System State and Physics.
-2. decide on a new U value (0.0 - 1.0).
+2. Decide on a new U value (0.0 - 1.0) that matches the current phase.
 3. If applicable, provide 'parameter_updates' (SDE) or 'config_updates' (Other scenarios) to tune the environment.
-4. Explain your reasoning.
+4. Keep changes conservative (prefer small deltas over abrupt jumps).
+5. Explain your reasoning.
 
 Return JSON:
 {
