@@ -10,9 +10,11 @@ import {
     validateAiLogPayload,
     validateDeleteAgentPayload,
     validateSaveAgentPayload,
+    validateSaveErdosReportPayload,
     validateSummonAgentPayload
 } from '../shared/ipcValidation'
 import { requestAiControl, requestAgentDescription } from './aiService'
+import { saveErdosReport } from './storage/erdosReportStorage'
 
 function createWindow(): void {
     const mainWindow = new BrowserWindow({
@@ -100,6 +102,19 @@ ipcMain.handle('delete-agent', async (_, id) => {
     return deleteAgentFromLibrary(userDataPath, id)
 })
 
+
+
+ipcMain.handle('save-erdos-report', async (_, payload) => {
+    if (!validateSaveErdosReportPayload(payload)) {
+        return { success: false, error: 'Invalid Erdos report payload.' }
+    }
+    const userDataPath = app.getPath('userData')
+    const result = saveErdosReport(userDataPath, payload)
+    if (!result.success) {
+        console.error('Failed to save Erdos report:', result.error)
+    }
+    return result
+})
 
 ipcMain.handle('summon-agent', async (_, payload) => {
     if (!validateSummonAgentPayload(payload)) {

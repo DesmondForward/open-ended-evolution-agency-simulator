@@ -13,6 +13,7 @@ const allowedInvokeChannels = new Set([
     'log-ai-action',
     'open-logs-folder',
     'save-agent',
+    'save-erdos-report',
     'get-agents',
     'delete-agent',
     'summon-agent',
@@ -44,6 +45,10 @@ const api = {
             return Promise.resolve({ success: false, error: 'Invalid agent payload.' });
         }
         return invokeAllowed('save-agent', agent);
+    },
+
+    saveErdosReport: (payload: any) => {
+        return invokeAllowed('save-erdos-report', payload);
     },
     getAgents: () => invokeAllowed('get-agents'),
     deleteAgent: (id: string) => {

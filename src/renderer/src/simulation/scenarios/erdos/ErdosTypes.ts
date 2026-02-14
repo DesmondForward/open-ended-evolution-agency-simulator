@@ -2,6 +2,7 @@ export type ProblemDomain = 'additive_number_theory' | 'combinatorics' | 'graph_
 
 export interface ErdosProblem {
     id: string;
+    erdosNumber: number;
     title: string;
     description: string;
     domain: ProblemDomain;
@@ -13,6 +14,7 @@ export interface ErdosProblem {
     steps: string[];
     agents: Array<{ name: string; id: string }>;
     copyAction: string;
+    resolutionReportMarkdown?: string;
 }
 
 export interface DiscoveryAgent {
