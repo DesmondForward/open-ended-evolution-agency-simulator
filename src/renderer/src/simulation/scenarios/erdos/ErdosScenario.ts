@@ -255,7 +255,6 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
         if (this.state.nextProblemIndex >= PROBLEM_BANK.length) {
             this.state.nextProblemIndex = 0;
             this.state.cycle += 1;
-            this.state.solvedProblems = [];
             this.eventQueue.push({
                 type: 'task_solved',
                 timestamp: this.state.generation,
@@ -374,7 +373,8 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
         }
         this.state.activeProblems = this.state.activeProblems.filter(problem => !problem.solved);
 
-        const solvedRatio = this.state.solvedProblems.length / PROBLEM_BANK.length;
+        const solvedProblemIds = new Set(this.state.solvedProblems.map(problem => problem.id));
+        const solvedRatio = Math.min(1, solvedProblemIds.size / PROBLEM_BANK.length);
         const specializationSpread = new Set(this.state.agents.map(agent => agent.specialization)).size / DOMAINS.length;
         const avgCollab = this.state.agents.reduce((sum, agent) => sum + agent.collaboration, 0) / this.state.agents.length;
         const avgSkill = this.state.agents.reduce((sum, agent) => sum + (agent.creativity + agent.rigor) / 2, 0) / this.state.agents.length;
