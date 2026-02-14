@@ -500,7 +500,7 @@ const sanitizeAgentConfig = (config: AgentConfig): AgentConfig => ({
 
 const sanitizeErdosConfig = (config: ErdosConfig): ErdosConfig => ({
     populationSize: Math.max(1, Math.floor(config.populationSize)),
-    problemsPerGeneration: Math.max(1, Math.floor(config.problemsPerGeneration)),
+    problemsPerGeneration: 1,
     mutationRate: clamp01(config.mutationRate),
     collaborationBoost: clamp01(config.collaborationBoost)
 });

@@ -33,7 +33,7 @@ export interface ErdosConfig {
 
 export const DEFAULT_ERDOS_CONFIG: ErdosConfig = {
     populationSize: 36,
-    problemsPerGeneration: 6,
+    problemsPerGeneration: 1,
     mutationRate: 0.12,
     collaborationBoost: 0.3
 };
@@ -52,6 +52,7 @@ export interface ErdosMetrics {
 
 export interface ErdosState {
     generation: number;
+    nextProblemIndex: number;
     agents: DiscoveryAgent[];
     activeProblems: ErdosProblem[];
     solvedProblems: ErdosProblem[];

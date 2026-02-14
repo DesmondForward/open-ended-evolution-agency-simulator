@@ -170,7 +170,7 @@ const ParameterPanel: React.FC = () => {
                         <>
                             <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>Discovery Controls</h4>
                             <ScenarioInput label="Population Size" value={scenarioConfigs.erdos.populationSize} min={8} max={120} step={1} tooltip="Number of research agencies exploring open problems." onChange={(value) => updateScenarioConfig({ populationSize: value as number })} />
-                            <ScenarioInput label="Problems / Generation" value={scenarioConfigs.erdos.problemsPerGeneration} min={1} max={8} step={1} tooltip="Number of Erdős problems in active rotation." onChange={(value) => updateScenarioConfig({ problemsPerGeneration: value as number })} />
+                            <ScenarioInput label="Problems / Generation" value={1} min={1} max={1} step={1} tooltip="Erdős mode enforces a single chronological open problem at a time." onChange={() => updateScenarioConfig({ problemsPerGeneration: 1 })} />
                             <ScenarioInput label="Mutation Rate" value={scenarioConfigs.erdos.mutationRate} min={0.01} max={0.5} step={0.01} tooltip="How rapidly agencies shift strategy and specialization." onChange={(value) => updateScenarioConfig({ mutationRate: value as number })} />
                             <ScenarioInput label="Collaboration Boost" value={scenarioConfigs.erdos.collaborationBoost} min={0} max={1} step={0.01} tooltip="How much U translates into coalition problem-solving advantage." onChange={(value) => updateScenarioConfig({ collaborationBoost: value as number })} />
                         </>
