@@ -1,9 +1,10 @@
 import React from 'react'
 import Dashboard from '../components/Dashboard'
 import LibraryView from '../components/LibraryView'
+import ErdosProblemsPanel from '../components/ErdosProblemsPanel'
 import { ConstraintLattice } from '../components/visualizations/ConstraintLattice'
 
-export type AppSectionId = 'dashboard' | 'library' | 'lattice'
+export type AppSectionId = 'dashboard' | 'library' | 'lattice' | 'erdos'
 
 export interface AppSectionConfig {
   id: AppSectionId
@@ -34,6 +35,17 @@ export const APP_SECTIONS: AppSectionConfig[] = [
     description: 'Explore the constraint-space map and relationships.',
     shortcut: '⌘/Ctrl+3',
     render: () => <ConstraintLattice />
+  },
+  {
+    id: 'erdos',
+    label: 'Erdos Problem Dashboard',
+    description: 'Track all Erdős open problems and generation-by-generation proof activity.',
+    shortcut: '⌘/Ctrl+4',
+    render: () => (
+      <div style={{ padding: '16px' }}>
+        <ErdosProblemsPanel />
+      </div>
+    )
   }
 ]
 

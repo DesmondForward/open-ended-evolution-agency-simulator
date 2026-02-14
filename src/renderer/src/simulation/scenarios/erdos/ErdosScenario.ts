@@ -79,6 +79,71 @@ const PROBLEM_BANK: Array<Omit<ErdosProblem, 'solved' | 'solutionQuality' | 'las
         domain: 'combinatorics',
         difficulty: 0.72,
         reward: 220
+    },
+
+    {
+        id: 'erdos-littlewood-offord',
+        title: 'Littlewood–Offord anti-concentration refinements',
+        description: 'Sharpen anti-concentration bounds for random signed sums with structured coefficient sets.',
+        domain: 'additive_number_theory',
+        difficulty: 0.81,
+        reward: 420
+    },
+    {
+        id: 'erdos-ginzburg-ziv-variants',
+        title: 'Erdős–Ginzburg–Ziv extremal threshold variants',
+        description: 'Improve extremal constants and structure theorems around zero-sum subsequences in finite abelian groups.',
+        domain: 'additive_number_theory',
+        difficulty: 0.79,
+        reward: 360
+    },
+    {
+        id: 'erdos-ko-rado-stability',
+        title: 'Erdős–Ko–Rado stability and supersaturation bounds',
+        description: 'Quantify stability gaps and supersaturation rates in intersecting-family extremal regimes.',
+        domain: 'combinatorics',
+        difficulty: 0.76,
+        reward: 340
+    },
+    {
+        id: 'erdos-hecke-lattice-points',
+        title: 'Lattice-point discrepancy on convex curves',
+        description: 'Strengthen discrepancy estimates for lattice points near convex planar curves with arithmetic structure.',
+        domain: 'geometry',
+        difficulty: 0.83,
+        reward: 480
+    },
+    {
+        id: 'erdos-gallai-path-cover',
+        title: 'Erdős–Gallai path/degree extremal refinements',
+        description: 'Tighten extremal edge thresholds for long paths and degree-sequence realizability constraints.',
+        domain: 'graph_theory',
+        difficulty: 0.74,
+        reward: 300
+    },
+    {
+        id: 'erdos-moser-equation',
+        title: 'Erdős–Moser equation exclusion bounds',
+        description: 'Advance exclusion bounds and structural impossibility arguments for Erdős–Moser-type exponential Diophantine equations.',
+        domain: 'additive_number_theory',
+        difficulty: 0.91,
+        reward: 760
+    },
+    {
+        id: 'erdos-regularity-removal',
+        title: 'Regularity/removal quantitative constants',
+        description: 'Improve quantitative dependence in graph/hypergraph removal lemmas relevant to Erdős-style extremal questions.',
+        domain: 'graph_theory',
+        difficulty: 0.88,
+        reward: 650
+    },
+    {
+        id: 'erdos-rado-sunflower',
+        title: 'Sunflower threshold exponent improvements',
+        description: 'Push exponent bounds for sunflower-free set systems and identify sharper transition behavior.',
+        domain: 'combinatorics',
+        difficulty: 0.84,
+        reward: 520
     }
 ];
 
@@ -133,7 +198,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     public metadata: ScenarioMetadata = {
         id: 'erdos',
         name: 'Erdős Open Problems',
-        description: 'Evolving discovery agencies collaborate to close Erdős-style open problems and expand the cognitive light cone.',
+        description: 'Evolving discovery agencies collaborate on the Erdős open-problem catalog (teorth/erdosproblems) and expand the cognitive light cone.',
         version: '0.1.0',
         type: 'erdos'
     };
@@ -152,6 +217,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     private getEmptyState(): ErdosState {
         return {
             generation: 0,
+            cycle: 1,
             nextProblemIndex: 0,
             agents: [],
             activeProblems: [],
@@ -182,8 +248,20 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     }
 
     private reseedProblems() {
-        if (this.state.activeProblems.length > 0 || this.state.nextProblemIndex >= PROBLEM_BANK.length) {
+        if (this.state.activeProblems.length > 0) {
             return;
+        }
+
+        if (this.state.nextProblemIndex >= PROBLEM_BANK.length) {
+            this.state.nextProblemIndex = 0;
+            this.state.cycle += 1;
+            this.state.solvedProblems = [];
+            this.eventQueue.push({
+                type: 'task_solved',
+                timestamp: this.state.generation,
+                data: { cycle: this.state.cycle },
+                message: `Starting verification cycle ${this.state.cycle} across the full Erdős problem catalog.`
+            });
         }
 
         const now = new Date().toISOString();
@@ -193,7 +271,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
             solved: false,
             solutionQuality: 0,
             lastStatusUpdate: now,
-            steps: buildInitialSteps(nextProblem.domain),
+            steps: [...buildInitialSteps(nextProblem.domain), `Cycle ${this.state.cycle}: baseline investigation initialized.`],
             agents: [],
             copyAction: ''
         };
@@ -388,6 +466,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
         this.state = {
             ...this.getEmptyState(),
             ...parsed,
+            cycle: typeof parsed.cycle === 'number' ? Math.max(1, Math.floor(parsed.cycle)) : 1,
             nextProblemIndex: typeof parsed.nextProblemIndex === 'number'
                 ? Math.max(0, Math.floor(parsed.nextProblemIndex))
                 : Array.isArray(parsed.solvedProblems)

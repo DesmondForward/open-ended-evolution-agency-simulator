@@ -46,6 +46,11 @@ function App(): JSX.Element {
         event.preventDefault()
         setActiveSectionId('lattice')
       }
+
+      if ((event.ctrlKey || event.metaKey) && event.code === 'Digit4') {
+        event.preventDefault()
+        setActiveSectionId('erdos')
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
