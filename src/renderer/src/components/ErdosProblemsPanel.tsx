@@ -5,6 +5,7 @@ import { useSimulationStore } from '../store/simulationStore';
 
 type ErdosDashboardProblem = {
     id: string;
+    erdosNumber: number;
     title: string;
     description: string;
     status: 'in progress' | 'solved';
@@ -110,7 +111,7 @@ const ErdosProblemsPanel: React.FC = () => {
                     return (
                         <div key={problem.id} style={{ border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px', display: 'grid', gap: '6px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                                <strong style={{ fontSize: '0.85rem' }}>{problem.title}</strong>
+                                <strong style={{ fontSize: '0.85rem' }}>#{problem.erdosNumber} — {problem.title}</strong>
                                 <span style={{ fontSize: '0.72rem', color: problem.status === 'solved' ? '#41d17d' : 'var(--color-text-secondary)' }}>{problem.status}</span>
                             </div>
                             <div style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>{problem.description}</div>

@@ -79,6 +79,14 @@ export interface DeleteAgentPayload {
     id: string;
 }
 
+
+export interface SaveErdosReportPayload {
+    problemId: string;
+    erdosNumber?: number;
+    title: string;
+    markdown: string;
+}
+
 export interface SummonAgentPayload {
     query: string;
     topK?: number;
@@ -175,6 +183,16 @@ export const validateSaveAgentPayload = (value: unknown): value is SaveAgentPayl
 export const validateDeleteAgentPayload = (value: unknown): value is DeleteAgentPayload => {
     if (!isRecord(value)) return false;
     if (!isString(value.id)) return false;
+    return true;
+};
+
+
+export const validateSaveErdosReportPayload = (value: unknown): value is SaveErdosReportPayload => {
+    if (!isRecord(value)) return false;
+    if (!isString(value.problemId) || !value.problemId.trim()) return false;
+    if (!isString(value.title) || !value.title.trim()) return false;
+    if (!isString(value.markdown) || !value.markdown.trim()) return false;
+    if (value.erdosNumber !== undefined && !isFiniteNumber(value.erdosNumber)) return false;
     return true;
 };
 

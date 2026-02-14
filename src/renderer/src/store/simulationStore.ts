@@ -91,6 +91,7 @@ interface SimulationStore {
     importState: (json: string) => boolean;
     getErdosProblemsForDashboard: () => Array<{
         id: string;
+        erdosNumber: number;
         title: string;
         description: string;
         status: 'in progress' | 'solved';
@@ -303,6 +304,7 @@ const toDashboardProblem = (problem: ErdosProblem) => {
             .filter((agent): agent is { name: string; id: string } => Boolean(agent && typeof agent.name === 'string' && typeof agent.id === 'string'))
         : [];
     const fallbackCopy = [
+        `**Erdos Number:** ${problem.erdosNumber ?? 'unknown'}`,
         `**Problem:** ${problem.title}`,
         `**Description:** ${problem.description}`,
         `**Status:** ${status === 'solved' ? 'Solved' : 'In progress'}`,
@@ -312,6 +314,7 @@ const toDashboardProblem = (problem: ErdosProblem) => {
 
     return {
         id: problem.id,
+        erdosNumber: typeof problem.erdosNumber === 'number' ? problem.erdosNumber : -1,
         title: problem.title,
         description: problem.description,
         status,
@@ -947,6 +950,21 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                     type: 'threshold_crossed'
                 };
                 updates.alerts = [...state.alerts, newAlert];
+            } else if (event.type === 'task_solved' && state.currentScenarioId === 'erdos') {
+                const win = window as any;
+                const reportMarkdown = event?.data?.reportMarkdown;
+                const problemId = event?.data?.problemId;
+                const erdosNumber = event?.data?.erdosNumber;
+                if (win.api && win.api.saveErdosReport && typeof reportMarkdown === 'string' && reportMarkdown.trim() && typeof problemId === 'string') {
+                    win.api.saveErdosReport({
+                        problemId,
+                        erdosNumber: typeof erdosNumber === 'number' ? erdosNumber : undefined,
+                        title: typeof event?.data?.title === 'string' ? event.data.title : problemId,
+                        markdown: reportMarkdown
+                    }).catch((error: unknown) => {
+                        console.warn('Failed to persist Erdos report:', error);
+                    });
+                }
             } else if (event.type === 'agent_emerged') {
                 const win = window as any;
                 const scenarioConfig = getScenarioConfigForId(
