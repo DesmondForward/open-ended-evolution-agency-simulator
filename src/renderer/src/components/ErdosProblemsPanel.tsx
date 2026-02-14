@@ -69,18 +69,13 @@ const panelStyle: React.CSSProperties = {
 
 const ErdosProblemsPanel: React.FC = () => {
     const getErdosProblemsForDashboard = useSimulationStore(state => state.getErdosProblemsForDashboard);
-    const currentScenarioId = useSimulationStore(state => state.currentScenarioId);
     const generation = useSimulationStore(state => state.currentState.generation);
-    const cycle = useSimulationStore(state => {
-        const scenarioState = state.scenarios.erdos?.getState ? state.scenarios.erdos.getState() : null;
-        return scenarioState?.cycle ?? 1;
-    });
+    const cycle = useSimulationStore(state => state.getErdosCycle());
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const problems = useMemo<ErdosDashboardProblem[]>(() => {
-        if (currentScenarioId !== 'erdos') return [];
         return getErdosProblemsForDashboard();
-    }, [currentScenarioId, generation, getErdosProblemsForDashboard, cycle]);
+    }, [generation, getErdosProblemsForDashboard, cycle]);
 
     const handleCopy = async (problem: ErdosDashboardProblem) => {
         try {

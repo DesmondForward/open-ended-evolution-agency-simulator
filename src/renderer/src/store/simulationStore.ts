@@ -99,6 +99,7 @@ interface SimulationStore {
         agents: Array<{ name: string; id: string }>;
         copy_action: string;
     }>;
+    getErdosCycle: () => number;
 }
 
 // Max telemetry points to keep in memory for charting
@@ -112,6 +113,7 @@ const alignmentScenario = new AlignmentScenario();
 const bioScenario = new BioScenario();
 const agentsScenario = new AgentsScenario();
 const erdosScenario = new ErdosScenario();
+erdosScenario.initialize(Date.now(), DEFAULT_ERDOS_CONFIG);
 
 const scenarios: Record<string, any> = {
     'sde-v1': sdeScenario,
@@ -260,14 +262,14 @@ const computeSimilarityVector = (metrics: {
     cognitiveHorizon?: number;
     competency?: number;
 }) => [
-    metrics.A,
-    metrics.C,
-    metrics.D,
-    metrics.U,
-    metrics.alertRate,
-    metrics.cognitiveHorizon ?? 0,
-    metrics.competency ?? 0
-];
+        metrics.A,
+        metrics.C,
+        metrics.D,
+        metrics.U,
+        metrics.alertRate,
+        metrics.cognitiveHorizon ?? 0,
+        metrics.competency ?? 0
+    ];
 
 const extractGenome = (legacy: LegacyAgent, scenarioType: ScenarioMetadata['type']) => {
     if (scenarioType === 'sde') {
@@ -488,7 +490,7 @@ const buildLibraryEntry = (
             cognitiveHorizon: analysis?.cognitiveHorizon ?? legacy.metrics.cognitiveHorizon,
             competency: analysis?.competency ?? legacy.metrics.competency
         },
-        researcherInterventions: context.interventionLog.slice(-12),
+        researcherInterventions: context.interventionLog.slice(-12) as unknown as Array<Record<string, unknown>>,
         environmentSnapshot: {
             control: context.control,
             scenarioConfig: context.scenarioConfig,
@@ -854,7 +856,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
 
                 const legacyAgent = buildLegacyAgent(event.data, {
                     currentState: state.currentState,
-                    parameters: scenarioConfig,
+                    parameters: scenarioConfig as unknown as Record<string, unknown>,
                     control: state.control,
                     validationMetrics: state.validationMetrics,
                     aiHistory: state.aiHistory,
@@ -1069,6 +1071,11 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 }
                 return Date.parse(b.timestamp) - Date.parse(a.timestamp);
             });
+    },
+
+    getErdosCycle: () => {
+        const scenarioState = scenarios.erdos?.getState ? scenarios.erdos.getState() : null;
+        return scenarioState?.cycle ?? 1;
     },
 
     loadAgents: async () => {
