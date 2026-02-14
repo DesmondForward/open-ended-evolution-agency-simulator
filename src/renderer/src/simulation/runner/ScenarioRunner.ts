@@ -1,4 +1,5 @@
 import { Scenario, ControlSignal, DEFAULT_CONTROL, TelemetryPoint, ScenarioEvent } from '../types';
+import { gpuAssist } from '../gpuAssist';
 
 export type RunnerStatus = 'idle' | 'running' | 'paused';
 
@@ -28,6 +29,8 @@ export class ScenarioRunner {
             onStatusChange: hooks.onStatusChange || (() => { }),
             onEvent: hooks.onEvent || (() => { })
         };
+
+        void gpuAssist.initialize();
     }
 
     public setScenario(scenario: Scenario) {
@@ -89,6 +92,13 @@ export class ScenarioRunner {
 
         while (this.accumulatedTime >= timePerTick) {
             this.scenario.step(this.currentControl);
+            const metrics = this.scenario.getMetrics();
+            gpuAssist.tick({
+                control: this.currentControl.U,
+                generation: metrics.generation,
+                C: metrics.C,
+                A: metrics.A
+            });
             this.accumulatedTime -= timePerTick;
 
             // Check for events

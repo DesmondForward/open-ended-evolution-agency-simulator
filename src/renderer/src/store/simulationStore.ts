@@ -105,6 +105,7 @@ interface SimulationStore {
 // Max telemetry points to keep in memory for charting
 const MAX_TELEMETRY_POINTS = 1000;
 const MAX_EVENT_LOGS = 100;
+const SESSION_STORAGE_KEY = 'fipsm_session_state_v1';
 
 // Initialize Scenarios
 const sdeScenario = new SDEScenario();
@@ -582,12 +583,75 @@ const initialLastGen = storedLastGen ? parseInt(storedLastGen) : 0;
 const initialRunId = crypto.randomUUID();
 const initialRunSeed = Date.now();
 
+type PersistedSession = {
+    scenarioId: string;
+    scenarioData: string;
+    scenarioConfigs: SimulationStore['scenarioConfigs'];
+    control: ControlSignal;
+    currentState: SimulationState;
+};
+
+const loadPersistedSession = (): PersistedSession | null => {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw) as Partial<PersistedSession>;
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (typeof parsed.scenarioId !== 'string' || typeof parsed.scenarioData !== 'string') return null;
+        if (!parsed.control || !parsed.currentState || !parsed.scenarioConfigs) return null;
+        return parsed as PersistedSession;
+    } catch (error) {
+        console.warn('[SimulationStore] Failed to parse persisted session state.', error);
+        return null;
+    }
+};
+
+const persistedSession = loadPersistedSession();
+if (persistedSession && scenarios[persistedSession.scenarioId]) {
+    try {
+        scenarios[persistedSession.scenarioId].deserialize(persistedSession.scenarioData);
+        runner.setScenario(scenarios[persistedSession.scenarioId]);
+        runner.setControl(persistedSession.control);
+    } catch (error) {
+        console.warn('[SimulationStore] Failed to hydrate persisted scenario state.', error);
+    }
+}
+
+const persistSession = (state: {
+    currentScenarioId: string;
+    scenarioConfigs: SimulationStore['scenarioConfigs'];
+    control: ControlSignal;
+    currentState: SimulationState;
+}) => {
+    const scenario = scenarios[state.currentScenarioId];
+    if (!scenario?.serialize) return;
+
+    try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+            scenarioId: state.currentScenarioId,
+            scenarioData: scenario.serialize(),
+            scenarioConfigs: state.scenarioConfigs,
+            control: state.control,
+            currentState: state.currentState
+        }));
+    } catch (error) {
+        console.warn('[SimulationStore] Failed to persist session state.', error);
+    }
+};
+
 export const useSimulationStore = create<SimulationStore & { handleTelemetry: (pt: TelemetryPoint) => void, handleEvent: (evt: any) => void }>((set, get) => ({
     // Initial State
     isPlaying: false,
-    currentState: { ...DEFAULT_INITIAL_STATE },
+    currentState: persistedSession?.currentState
+        ? { ...DEFAULT_INITIAL_STATE, ...persistedSession.currentState }
+        : { ...DEFAULT_INITIAL_STATE },
     parameters: initialBest ? { ...DEFAULT_PARAMETERS, ...initialBest.parameters } : { ...DEFAULT_PARAMETERS },
-    control: initialBest && initialBest.control ? { ...initialBest.control } : { ...DEFAULT_CONTROL },
+    control: persistedSession?.control
+        ? { ...DEFAULT_CONTROL, ...persistedSession.control }
+        : initialBest && initialBest.control
+            ? { ...initialBest.control }
+            : { ...DEFAULT_CONTROL },
     telemetry: [],
     alerts: [],
     events: [],
@@ -598,8 +662,10 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
     },
     logPersistenceError: null,
 
-    currentScenarioId: 'sde-v1',
-    scenarioMetadata: sdeScenario.metadata,
+    currentScenarioId: persistedSession?.scenarioId && scenarios[persistedSession.scenarioId] ? persistedSession.scenarioId : 'sde-v1',
+    scenarioMetadata: persistedSession?.scenarioId && scenarios[persistedSession.scenarioId]
+        ? scenarios[persistedSession.scenarioId].metadata
+        : sdeScenario.metadata,
     availableScenarios: [
         sdeScenario.metadata,
         mathScenario.metadata,
@@ -608,7 +674,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         agentsScenario.metadata,
         erdosScenario.metadata
     ],
-    scenarioConfigs: {
+    scenarioConfigs: persistedSession?.scenarioConfigs || {
         math: { ...DEFAULT_MATH_CONFIG },
         alignment: { ...DEFAULT_ALIGNMENT_CONFIG },
         bio: { ...DEFAULT_BIO_CONFIG },
@@ -666,6 +732,13 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             currentRunId: crypto.randomUUID(),
             currentRunSeed: seed,
         });
+
+        persistSession({
+            currentScenarioId: currentId,
+            scenarioConfigs: get().scenarioConfigs,
+            control: get().control,
+            currentState: { ...DEFAULT_INITIAL_STATE }
+        });
     },
 
     setControl: (U: number) => {
@@ -683,6 +756,12 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         };
 
         set({ control: newControl, interventionLog: [...interventionLog, logEntry] });
+        persistSession({
+            currentScenarioId: get().currentScenarioId,
+            scenarioConfigs: get().scenarioConfigs,
+            control: newControl,
+            currentState: get().currentState
+        });
     },
 
     updateParameters: (newParams) => {
@@ -737,6 +816,12 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         };
 
         set({ scenarioConfigs: updatedConfigs, interventionLog: [...get().interventionLog, logEntry] });
+        persistSession({
+            currentScenarioId: get().currentScenarioId,
+            scenarioConfigs: updatedConfigs,
+            control: get().control,
+            currentState: get().currentState
+        });
     },
 
     switchScenario: (id: string) => {
@@ -761,6 +846,13 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
             events: [],
             currentRunId: crypto.randomUUID(),
             currentRunSeed: seed
+        });
+
+        persistSession({
+            currentScenarioId: id,
+            scenarioConfigs: get().scenarioConfigs,
+            control: get().control,
+            currentState: get().currentState
         });
     },
 
@@ -815,7 +907,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         set(state => {
             const newTelemetry = [...state.telemetry, point];
             if (newTelemetry.length > MAX_TELEMETRY_POINTS) newTelemetry.shift();
-            return {
+            const nextState = {
                 telemetry: newTelemetry,
                 currentState: {
                     ...state.currentState,
@@ -827,6 +919,15 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 },
                 ...(bestUpdate || {})
             };
+
+            persistSession({
+                currentScenarioId: state.currentScenarioId,
+                scenarioConfigs: state.scenarioConfigs,
+                control: state.control,
+                currentState: nextState.currentState
+            });
+
+            return nextState;
         });
     },
 
@@ -968,13 +1069,21 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                 outcome: { A_before: currentState.A, A_after: currentState.A, delta_A: 0 }
             };
 
+            const nextControl = { ...control, U: decision.u };
             set({
-                control: { ...control, U: decision.u },
+                control: nextControl,
                 aiReasoning: decision.reasoning,
                 lastAiUpdate: new Date(),
                 aiStatus: 'idle',
                 aiHistory: [...historyWithOutcomes, newHistoryEntry],
                 interventionLog: newInterventionLog
+            });
+
+            persistSession({
+                currentScenarioId: get().currentScenarioId,
+                scenarioConfigs: get().scenarioConfigs,
+                control: nextControl,
+                currentState: get().currentState
             });
 
             // Apply to Runner
@@ -1006,6 +1115,12 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                         currentScenario.updateConfig(updatedConfigs.erdos);
                     }
                     set({ scenarioConfigs: updatedConfigs });
+                    persistSession({
+                        currentScenarioId: get().currentScenarioId,
+                        scenarioConfigs: updatedConfigs,
+                        control: get().control,
+                        currentState: get().currentState
+                    });
                 }
             }
 
@@ -1063,7 +1178,22 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
 
         if (allProblems.length === 0) return [];
 
-        return allProblems
+        const uniqueByProblemId = new Map<string, ErdosProblem>();
+        allProblems.forEach(problem => {
+            const existing = uniqueByProblemId.get(problem.id);
+            if (!existing) {
+                uniqueByProblemId.set(problem.id, problem);
+                return;
+            }
+
+            const existingTimestamp = Date.parse(existing.lastStatusUpdate || '');
+            const incomingTimestamp = Date.parse(problem.lastStatusUpdate || '');
+            if (incomingTimestamp >= existingTimestamp || (!existing.solved && problem.solved)) {
+                uniqueByProblemId.set(problem.id, problem);
+            }
+        });
+
+        return Array.from(uniqueByProblemId.values())
             .map(toDashboardProblem)
             .sort((a, b) => {
                 if (a.status !== b.status) {
@@ -1167,3 +1297,14 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         }
     }
 }));
+
+
+window.addEventListener('beforeunload', () => {
+    const state = useSimulationStore.getState();
+    persistSession({
+        currentScenarioId: state.currentScenarioId,
+        scenarioConfigs: state.scenarioConfigs,
+        control: state.control,
+        currentState: state.currentState
+    });
+});
