@@ -100,7 +100,7 @@ const isStringArray = (value: unknown): value is string[] => {
 };
 
 const isScenarioType = (value: unknown): value is ScenarioType => {
-    return value === 'sde' || value === 'math' || value === 'alignment' || value === 'bio' || value === 'agents';
+    return value === 'sde' || value === 'math' || value === 'alignment' || value === 'bio' || value === 'agents' || value === 'erdos';
 };
 
 export const validateAiLogPayload = (value: unknown): value is AiLogPayload => {
