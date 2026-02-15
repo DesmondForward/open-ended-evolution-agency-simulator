@@ -1,6 +1,11 @@
 import { SimulationState, SimulationParameters, ControlSignal, AIHistoryEntry, ScenarioMetadata } from '../simulation/types';
 import { LibraryEntry, LegacyAgent } from '../../../shared/agentLibrary';
-import { validateAiControlResponsePayload, validateAiDescriptionResponsePayload, AiDescriptionResponsePayload } from '../../../shared/ipcValidation';
+import {
+    validateAiControlResponsePayload,
+    validateAiDescriptionResponsePayload,
+    AiDescriptionResponsePayload,
+    AiServiceErrorPayload
+} from '../../../shared/ipcValidation';
 
 export const fetchAIControl = async (
     state: SimulationState,
@@ -11,7 +16,7 @@ export const fetchAIControl = async (
     bestAgency: number = 0,
     bestControl: ControlSignal | null = null,
     _savedAgents: LibraryEntry[] = []
-): Promise<{ u: number; reasoning: string; params?: any; error?: string } | null> => {
+): Promise<{ u: number; reasoning: string; params?: any; error?: string; errorDetails?: AiServiceErrorPayload } | null> => {
     void _savedAgents;
     if (typeof window === 'undefined') {
         return { error: 'Window not defined (SSR?)', u: control.U, reasoning: '' };
@@ -36,7 +41,13 @@ export const fetchAIControl = async (
 
         if (!response?.success) {
             console.warn('[AI Service] AI control request failed:', response?.error);
-            return { error: response?.error || 'Unknown IPC error', u: control.U, reasoning: '' };
+            const message = typeof response?.error === 'string' ? response.error : response?.error?.message;
+            return {
+                error: message || 'Unknown IPC error',
+                errorDetails: typeof response?.error === 'object' ? response.error : undefined,
+                u: control.U,
+                reasoning: ''
+            };
         }
 
         if (!response.data || !validateAiControlResponsePayload(response.data)) {
@@ -59,47 +70,23 @@ export const generateAgentDescription = async (
 
     const win = window as any;
     if (!win.api || !win.api.generateAgentDescription) {
-        return {
-            name: `Agent-${agentData.id.substring(0, 6)}`,
-            description: "AI IPC bridge missing. Auto-generated placeholder description.",
-            tags: ["High-Agency", "Manual"],
-            cognitiveHorizon: 0,
-            competency: 0
-        };
+        return null;
     }
 
     try {
         const response = await win.api.generateAgentDescription({ agentData });
         if (!response?.success || !response.data) {
-            return {
-                name: `Agent-${agentData.id.substring(0, 8)}`,
-                description: "Failed to generate AI description. See console for error.",
-                tags: ["Error"],
-                cognitiveHorizon: 0,
-                competency: 0
-            };
+            return null;
         }
 
         if (!validateAiDescriptionResponsePayload(response.data)) {
             console.warn('[AI Service] Invalid AI description payload received:', response.data);
-            return {
-                name: `Agent-${agentData.id.substring(0, 8)}`,
-                description: "Invalid AI description payload.",
-                tags: ["Error"],
-                cognitiveHorizon: 0,
-                competency: 0
-            };
+            return null;
         }
 
         return response.data;
     } catch (e) {
         console.error('[AI Service] Exception during agent description generation:', e);
-        return {
-            name: `Agent-${agentData.id.substring(0, 8)}`,
-            description: "Exception during generation.",
-            tags: ["Error"],
-            cognitiveHorizon: 0,
-            competency: 0
-        };
+        return null;
     }
 };

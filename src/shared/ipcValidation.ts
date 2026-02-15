@@ -1,5 +1,6 @@
 import { ScenarioType } from './scenarioTypes';
 import { isLegacyAgent, isLibraryEntry, LegacyAgent, LibraryEntry } from './agentLibrary';
+import { aiControlResponseSchema, aiDescriptionResponseSchema, JsonSchema } from './schemas/aiResponseSchemas';
 
 export interface AiLogPayload {
     generation: number;
@@ -46,6 +47,25 @@ export interface AiControlResponsePayload {
     reasoning: string;
     params?: Record<string, unknown>;
 }
+
+export type AiServiceErrorCode =
+    | 'AI_API_KEY_MISSING'
+    | 'AI_API_ERROR'
+    | 'AI_RESPONSE_PARSE_ERROR'
+    | 'AI_SCHEMA_VALIDATION_ERROR'
+    | 'AI_ABORTED'
+    | 'AI_NETWORK_ERROR';
+
+export interface AiServiceErrorPayload {
+    code: AiServiceErrorCode;
+    message: string;
+    retryable: boolean;
+    details?: Record<string, unknown>;
+}
+
+export type AiServiceResult<T> =
+    | { ok: true; data: T }
+    | { ok: false; error: AiServiceErrorPayload };
 
 export interface AiDescriptionRequestPayload {
     agentData: {
@@ -111,6 +131,14 @@ const isStringArray = (value: unknown): value is string[] => {
     return Array.isArray(value) && value.every(isString);
 };
 
+const isWithinRange = (value: number, minimum: number, maximum: number): boolean => {
+    return value >= minimum && value <= maximum;
+};
+
+const hasOnlyKeys = (value: Record<string, unknown>, allowedKeys: string[]): boolean => {
+    return Object.keys(value).every(key => allowedKeys.includes(key));
+};
+
 const isScenarioType = (value: unknown): value is ScenarioType => {
     return value === 'sde' || value === 'math' || value === 'alignment' || value === 'bio' || value === 'agents' || value === 'erdos';
 };
@@ -144,8 +172,12 @@ export const validateAiControlRequestPayload = (value: unknown): value is AiCont
 
 export const validateAiControlResponsePayload = (value: unknown): value is AiControlResponsePayload => {
     if (!isRecord(value)) return false;
+    const schema = aiControlResponseSchema as JsonSchema;
+    if (schema.additionalProperties === false && !hasOnlyKeys(value, Object.keys(schema.properties))) return false;
     if (!isFiniteNumber(value.u)) return false;
+    if (!isWithinRange(value.u, 0, 1)) return false;
     if (!isString(value.reasoning)) return false;
+    if (!value.reasoning.trim()) return false;
     if (value.params !== undefined && !isRecord(value.params)) return false;
     return true;
 };
@@ -165,13 +197,18 @@ export const validateAiDescriptionRequestPayload = (value: unknown): value is Ai
 
 export const validateAiDescriptionResponsePayload = (value: unknown): value is AiDescriptionResponsePayload => {
     if (!isRecord(value)) return false;
+    const schema = aiDescriptionResponseSchema as JsonSchema;
+    if (schema.additionalProperties === false && !hasOnlyKeys(value, Object.keys(schema.properties))) return false;
     if (!isString(value.name)) return false;
+    if (!value.name.trim()) return false;
     if (!isString(value.description)) return false;
+    if (!value.description.trim()) return false;
     if (!isStringArray(value.tags)) return false;
-    // Optional fields don't need strict type checks if we trust they are number | undefined, 
-    // but good to check if present they are numbers.
-    if (value.cognitiveHorizon !== undefined && !isFiniteNumber(value.cognitiveHorizon)) return false;
-    if (value.competency !== undefined && !isFiniteNumber(value.competency)) return false;
+    if (value.tags.length < 1) return false;
+    if (!isFiniteNumber(value.cognitiveHorizon)) return false;
+    if (!isWithinRange(value.cognitiveHorizon, 0, 1)) return false;
+    if (!isFiniteNumber(value.competency)) return false;
+    if (!isWithinRange(value.competency, 0, 1)) return false;
     return true;
 };
 
