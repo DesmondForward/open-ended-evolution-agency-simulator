@@ -138,13 +138,12 @@ ipcMain.handle('ai-control-request', async (_, payload) => {
     }
     try {
         const result = await enqueueAi(() => requestAiControl(payload));
-        if (!result) {
-            // This case might be unreachable now if requestAiControl always throws or returns non-null, but keeping for safety
-            return { success: false, error: 'AI control request failed silently.' }
+        if (!result.ok) {
+            return { success: false, error: result.error };
         }
-        return { success: true, data: result };
+        return { success: true, data: result.data };
     } catch (error: any) {
-        return { success: false, error: error.message || 'Unknown AI error' };
+        return { success: false, error: { code: 'AI_API_ERROR', message: error.message || 'Unknown AI error', retryable: false } };
     }
 });
 
@@ -153,10 +152,10 @@ ipcMain.handle('ai-agent-description', async (_, payload) => {
         return { success: false, error: 'Invalid AI description payload.' }
     }
     const result = await enqueueAi(() => requestAgentDescription(payload));
-    if (!result) {
-        return { success: false, error: 'AI description request failed.' }
+    if (!result.ok) {
+        return { success: false, error: result.error }
     }
-    return { success: true, data: result };
+    return { success: true, data: result.data };
 });
 
 app.whenReady().then(() => {
