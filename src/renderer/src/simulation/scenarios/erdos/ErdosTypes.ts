@@ -1,5 +1,24 @@
 export type ProblemDomain = 'additive_number_theory' | 'combinatorics' | 'graph_theory' | 'geometry';
 
+export type EvaluatorStatus = 'verified' | 'refuted' | 'inconclusive';
+export type ErdosArtifactType = 'proofSketch' | 'formalProof' | 'counterexampleWitness' | 'boundCertificate';
+
+export interface ErdosArtifact {
+    id: string;
+    type: ErdosArtifactType;
+    generation: number;
+    createdAt: string;
+    summary: string;
+    evidenceReferences: string[];
+}
+
+export interface EvaluatorOutput {
+    candidateArtifactId: string;
+    status: EvaluatorStatus;
+    evidenceReferences: string[];
+    evaluatedAt: string;
+}
+
 export interface ErdosProblem {
     id: string;
     erdosNumber: number;
@@ -9,12 +28,14 @@ export interface ErdosProblem {
     difficulty: number; // 0-1
     reward: number;
     solved: boolean;
-    solutionQuality: number;
     lastStatusUpdate: string;
     steps: string[];
     agents: Array<{ name: string; id: string }>;
     copyAction: string;
     resolutionReportMarkdown?: string;
+    datasetRevision: string;
+    artifacts: ErdosArtifact[];
+    evaluator: EvaluatorOutput;
 }
 
 export interface DiscoveryAgent {
@@ -56,6 +77,7 @@ export interface ErdosState {
     generation: number;
     cycle: number;
     nextProblemIndex: number;
+    artifactCounter: number;
     agents: DiscoveryAgent[];
     activeProblems: ErdosProblem[];
     solvedProblems: ErdosProblem[];

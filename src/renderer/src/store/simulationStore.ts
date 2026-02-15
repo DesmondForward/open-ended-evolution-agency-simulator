@@ -960,7 +960,13 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
                         problemId,
                         erdosNumber: typeof erdosNumber === 'number' ? erdosNumber : undefined,
                         title: typeof event?.data?.title === 'string' ? event.data.title : problemId,
-                        markdown: reportMarkdown
+                        markdown: reportMarkdown,
+                        datasetRevision: typeof event?.data?.datasetRevision === 'string' ? event.data.datasetRevision : 'unknown',
+                        evaluatorStatus: typeof event?.data?.evaluatorStatus === 'string' ? event.data.evaluatorStatus : 'inconclusive',
+                        evaluatorArtifactId: typeof event?.data?.evaluatorArtifactId === 'string' ? event.data.evaluatorArtifactId : 'unknown-artifact',
+                        evidenceReferences: Array.isArray(event?.data?.evidenceReferences)
+                            ? event.data.evidenceReferences.filter((ref: unknown): ref is string => typeof ref === 'string')
+                            : []
                     }).catch((error: unknown) => {
                         console.warn('Failed to persist Erdos report:', error);
                     });

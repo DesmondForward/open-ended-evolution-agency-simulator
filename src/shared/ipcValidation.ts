@@ -85,6 +85,10 @@ export interface SaveErdosReportPayload {
     erdosNumber?: number;
     title: string;
     markdown: string;
+    datasetRevision: string;
+    evaluatorStatus: 'verified' | 'refuted' | 'inconclusive';
+    evaluatorArtifactId: string;
+    evidenceReferences: string[];
 }
 
 export interface SummonAgentPayload {
@@ -192,6 +196,10 @@ export const validateSaveErdosReportPayload = (value: unknown): value is SaveErd
     if (!isString(value.problemId) || !value.problemId.trim()) return false;
     if (!isString(value.title) || !value.title.trim()) return false;
     if (!isString(value.markdown) || !value.markdown.trim()) return false;
+    if (!isString(value.datasetRevision) || !value.datasetRevision.trim()) return false;
+    if (!isString(value.evaluatorArtifactId) || !value.evaluatorArtifactId.trim()) return false;
+    if (!isStringArray(value.evidenceReferences)) return false;
+    if (!['verified', 'refuted', 'inconclusive'].includes(String(value.evaluatorStatus))) return false;
     if (value.erdosNumber !== undefined && !isFiniteNumber(value.erdosNumber)) return false;
     return true;
 };
