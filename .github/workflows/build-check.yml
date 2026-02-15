@@ -1,0 +1,41 @@
+name: build-check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: |
+          mkdir -p artifacts/metrics
+          START_TIME=$(date +%s)
+          npm run build
+          END_TIME=$(date +%s)
+          cat > artifacts/metrics/build-metrics.json <<EOF_METRICS
+          {
+            "command": "npm run build",
+            "durationSeconds": $((END_TIME-START_TIME)),
+            "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF_METRICS
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-metrics
+          path: artifacts/metrics/build-metrics.json
