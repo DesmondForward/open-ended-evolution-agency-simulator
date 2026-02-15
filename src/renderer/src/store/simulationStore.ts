@@ -1244,7 +1244,7 @@ export const useSimulationStore = create<SimulationStore & { handleTelemetry: (p
         const snapshot: SnapshotData = createSnapshot({
             meta: {
                 version: '2.1.0',
-                timestamp: Date.now(),
+                timestamp: state.currentState.generation,
                 scenarioId: state.currentScenarioId
             },
             store: {

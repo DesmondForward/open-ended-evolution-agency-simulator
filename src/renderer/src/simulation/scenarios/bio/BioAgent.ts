@@ -31,7 +31,7 @@ export class BioAgent {
         }
 
         return new BioAgent({
-            id: `bio-${Date.now()}-${prng.nextInt(0, 10000)}`,
+            id: `bio-${prng.nextInt(0, 10000)}`,
             metabolism: prng.next(),
             reproductionRate: prng.next(),
             toxinResistance: 0.1,
@@ -144,7 +144,7 @@ export class BioAgent {
         }
 
         return new BioAgent({
-            id: `child-${Date.now()}-${prng.nextInt(0, 1000)}`,
+            id: `child-${prng.nextInt(0, 1000)}`,
             metabolism: drift(this.genome.metabolism),
             reproductionRate: drift(this.genome.reproductionRate),
             toxinResistance: drift(this.genome.toxinResistance),

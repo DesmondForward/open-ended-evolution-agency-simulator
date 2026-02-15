@@ -196,7 +196,7 @@ const migrateV2_0 = (raw: any): SnapshotData | null => {
     return {
         meta: {
             version: SNAPSHOT_VERSION,
-            timestamp: isFiniteNumber(raw.meta.timestamp) ? raw.meta.timestamp : Date.now(),
+            timestamp: isFiniteNumber(raw.meta.timestamp) ? raw.meta.timestamp : 0,
             scenarioId
         },
         store: storeData,
@@ -217,7 +217,7 @@ export const parseSnapshot = (json: string): SnapshotData | null => {
             return {
                 meta: {
                     version,
-                    timestamp: isFiniteNumber(raw.meta.timestamp) ? raw.meta.timestamp : Date.now(),
+                    timestamp: isFiniteNumber(raw.meta.timestamp) ? raw.meta.timestamp : 0,
                     scenarioId
                 },
                 store: {

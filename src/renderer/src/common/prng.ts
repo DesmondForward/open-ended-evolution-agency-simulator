@@ -17,6 +17,13 @@ export class PRNG {
     }
 
     /**
+     * Get current internal state for deterministic serialization/replay.
+     */
+    public getState(): number {
+        return this.seed;
+    }
+
+    /**
      * Get the next random number between 0 (inclusive) and 1 (exclusive)
      */
     public next(): number {

@@ -8,6 +8,7 @@
 import { MathExpression, MathOperator, ASTGenomeData, MathGenome, NeuralGenomeData } from './MathTypes';
 import { PRNG } from '../../../common/prng';
 import { NeuralGuide, NeuralGuideConfig } from './NeuralGuide';
+import { RunContext } from '../../RunContext';
 
 /**
  * Available operators for AST evolution
@@ -251,7 +252,7 @@ export class ASTGenomeFactory {
     /**
      * Create a random AST genome
      */
-    static createRandom(prng: PRNG): MathGenome {
+    static createRandom(prng: PRNG, runContext?: RunContext): MathGenome {
         const mutator = new ASTMutator(prng);
 
         const astData: ASTGenomeData = {
@@ -274,7 +275,7 @@ export class ASTGenomeFactory {
         };
 
         return {
-            id: `ast-${Date.now()}-${prng.nextInt(0, 10000)}`,
+            id: runContext ? runContext.nextId('ast') : `ast-${prng.nextInt(0, 10000)}`,
             type: 'ast',
             data: astData,
             solvedCount: 0,

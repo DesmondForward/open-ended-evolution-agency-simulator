@@ -30,7 +30,7 @@ export class SDEScenario implements Scenario<SimulationParameters> {
     private lastU: number = 0;
 
     constructor() {
-        this.prng = new PRNG(Date.now());
+        this.prng = new PRNG(0);
         this.state = { ...DEFAULT_INITIAL_STATE };
         this.params = { ...DEFAULT_PARAMETERS };
     }

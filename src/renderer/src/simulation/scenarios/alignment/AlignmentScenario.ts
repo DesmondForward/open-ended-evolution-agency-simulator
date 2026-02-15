@@ -22,7 +22,7 @@ export class AlignmentScenario implements Scenario<AlignmentConfig> {
     private agentLogic: AlignmentAgent[] = [];
 
     constructor() {
-        this.prng = new PRNG(Date.now());
+        this.prng = new PRNG(0);
         this.config = { ...DEFAULT_ALIGNMENT_CONFIG };
         this.state = this.getEmptyState();
     }

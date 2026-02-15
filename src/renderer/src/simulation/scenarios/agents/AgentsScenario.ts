@@ -11,6 +11,7 @@ import { AgentScenarioState, AgentConfig, DEFAULT_AGENT_CONFIG, AgentTask, Actio
 import { AgentLogic } from './AgentLogic';
 import * as AgencyMetrics from '../../metrics/AgencyMetrics';
 import { SimulationLogger } from '../../logging/SimulationLogger';
+import { RunContext, RunContextState } from '../../RunContext';
 
 export class AgentsScenario implements Scenario<AgentConfig> {
     public metadata: ScenarioMetadata = {
@@ -25,12 +26,14 @@ export class AgentsScenario implements Scenario<AgentConfig> {
     private config: AgentConfig;
     private prng: PRNG;
     private eventQueue: ScenarioEvent[] = [];
+    private runContext: RunContext;
 
     // Drift tracking
     private currentRequirements: Record<ActionType, number>;
 
     constructor() {
-        this.prng = new PRNG(Date.now());
+        this.runContext = new RunContext(0);
+        this.prng = this.runContext.getPrng();
         this.config = { ...DEFAULT_AGENT_CONFIG };
         this.state = this.getEmptyState();
         this.currentRequirements = this.getDefaultRequirements();
@@ -61,7 +64,8 @@ export class AgentsScenario implements Scenario<AgentConfig> {
     }
 
     public initialize(seed: number, config?: AgentConfig) {
-        this.prng.setSeed(seed);
+        this.runContext = new RunContext(seed);
+        this.prng = this.runContext.getPrng();
         if (config) this.config = { ...DEFAULT_AGENT_CONFIG, ...config };
 
         this.state = this.getEmptyState();
@@ -69,7 +73,7 @@ export class AgentsScenario implements Scenario<AgentConfig> {
 
         // Spawn Initial Pop
         for (let i = 0; i < this.config.populationSize; i++) {
-            this.state.agents.push(AgentLogic.random(this.prng, 0));
+            this.state.agents.push(AgentLogic.random(this.prng, 0, this.runContext));
         }
     }
 
@@ -88,10 +92,11 @@ export class AgentsScenario implements Scenario<AgentConfig> {
 
     public step(control: ControlSignal) {
         this.state.generation++;
+        this.runContext.tick();
 
         if (this.state.agents.length === 0) {
             for (let i = 0; i < this.config.populationSize; i++) {
-                this.state.agents.push(AgentLogic.random(this.prng, this.state.generation));
+                this.state.agents.push(AgentLogic.random(this.prng, this.state.generation, this.runContext));
             }
         }
 
@@ -187,7 +192,7 @@ export class AgentsScenario implements Scenario<AgentConfig> {
         // Fill with mutants
         while (nextGen.length < this.config.populationSize) {
             const parent = survivors[this.prng.nextInt(0, survivors.length)];
-            const child = parent.mutate(this.prng, this.state.generation);
+            const child = parent.mutate(this.prng, this.state.generation, this.runContext);
             nextGen.push(child);
         }
 
@@ -316,8 +321,28 @@ export class AgentsScenario implements Scenario<AgentConfig> {
     }
 
     public getState(): any { return this.state; }
-    public serialize(): string { return JSON.stringify(this.state); }
-    public deserialize(json: string) { this.state = JSON.parse(json); }
+    public serialize(): string {
+        return JSON.stringify({
+            state: this.state,
+            config: this.config,
+            currentRequirements: this.currentRequirements,
+            runContext: this.runContext.getState()
+        });
+    }
+    public deserialize(json: string) {
+        const data = JSON.parse(json);
+        this.state = data.state ?? this.getEmptyState();
+        this.config = data.config ?? { ...DEFAULT_AGENT_CONFIG };
+        this.currentRequirements = data.currentRequirements ?? this.getDefaultRequirements();
+        const runContextState = data.runContext as RunContextState | undefined;
+        const seed = runContextState?.seed ?? 0;
+        this.runContext = new RunContext(seed);
+        if (runContextState) {
+            this.runContext.restore(runContextState);
+        }
+        this.runContext.setTick(this.state.generation);
+        this.prng = this.runContext.getPrng();
+    }
     public getEvents() { return [...this.eventQueue]; }
     public clearEvents() { this.eventQueue = []; }
 }

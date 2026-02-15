@@ -8,6 +8,7 @@
 
 import { MathTask, MathGenome, ASTGenomeData, MathExpression } from './MathTypes';
 import { PRNG } from '../../../common/prng';
+import { RunContext } from '../../RunContext';
 
 /**
  * Population statistics used for adaptive task generation
@@ -39,6 +40,13 @@ export interface AdversarialConfig {
     adaptationRate: number;         // How quickly to adapt to performance
 }
 
+
+export interface AdversarialGeneratorState {
+    taskHistory: TaskPerformance[];
+    currentDifficulty: number;
+    weaknessProfile: WeaknessProfile;
+}
+
 export const DEFAULT_ADVERSARIAL_CONFIG: AdversarialConfig = {
     targetSolveRate: 0.5,
     explorationRate: 0.2,
@@ -56,13 +64,19 @@ export const DEFAULT_ADVERSARIAL_CONFIG: AdversarialConfig = {
  */
 export class AdversarialTaskGenerator {
     private prng: PRNG;
+    private runContext?: RunContext;
     private config: AdversarialConfig;
     private taskHistory: TaskPerformance[] = [];
     private currentDifficulty: number = 0.3;
     private weaknessProfile: WeaknessProfile;
 
-    constructor(seed: number, config: Partial<AdversarialConfig> = {}) {
-        this.prng = new PRNG(seed);
+    constructor(seedOrContext: number | RunContext, config: Partial<AdversarialConfig> = {}) {
+        if (typeof seedOrContext === 'number') {
+            this.prng = new PRNG(seedOrContext);
+        } else {
+            this.runContext = seedOrContext;
+            this.prng = seedOrContext.getPrng();
+        }
         this.config = { ...DEFAULT_ADVERSARIAL_CONFIG, ...config };
         this.weaknessProfile = {
             linearWeakness: 0.5,
@@ -181,7 +195,7 @@ export class AdversarialTaskGenerator {
         const c = (a * x) + b;
 
         return {
-            id: `adv-linear-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('adv-linear') : `adv-linear-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_linear',
             statement: `${a}x + (${b}) = ${c}`,
@@ -215,7 +229,7 @@ export class AdversarialTaskGenerator {
         const cSign = c >= 0 ? '+' : '-';
 
         return {
-            id: `adv-quad-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('adv-quad') : `adv-quad-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_quadratic',
             statement: `x^2 ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`,
@@ -237,7 +251,7 @@ export class AdversarialTaskGenerator {
         const c = (a * x) + b;
 
         return {
-            id: `adv-large-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('adv-large') : `adv-large-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_linear',
             statement: `${a}x + (${b}) = ${c}`,
@@ -260,7 +274,7 @@ export class AdversarialTaskGenerator {
         const c = (a * x) + b;
 
         return {
-            id: `adv-neg-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('adv-neg') : `adv-neg-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_linear',
             statement: `${a}x + (${b}) = ${c}`,
@@ -284,7 +298,7 @@ export class AdversarialTaskGenerator {
         const c = (a * x) + b;
 
         return {
-            id: `adv-edge-lin-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('adv-edge-lin') : `adv-edge-lin-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_linear',
             statement: `${a}x + (${b}) = ${c}`,
@@ -311,7 +325,7 @@ export class AdversarialTaskGenerator {
         const cSign = c >= 0 ? '+' : '-';
 
         return {
-            id: `adv-edge-quad-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('adv-edge-quad') : `adv-edge-quad-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_quadratic',
             statement: `x^2 ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`,
@@ -340,7 +354,7 @@ export class AdversarialTaskGenerator {
             taskType: task.type,
             difficulty: task.difficulty,
             solveRate,
-            timestamp: Date.now()
+            timestamp: this.runContext ? this.runContext.getTick() : this.taskHistory.length
         });
 
         // Keep only recent history
@@ -396,6 +410,26 @@ export class AdversarialTaskGenerator {
             currentDifficulty: this.currentDifficulty,
             weaknessProfile: { ...this.weaknessProfile },
             recentTaskCount: this.taskHistory.length
+        };
+    }
+
+
+    public getDeterministicState(): AdversarialGeneratorState {
+        return {
+            taskHistory: this.taskHistory.map(entry => ({ ...entry })),
+            currentDifficulty: this.currentDifficulty,
+            weaknessProfile: { ...this.weaknessProfile }
+        };
+    }
+
+    public restoreDeterministicState(state: AdversarialGeneratorState): void {
+        this.taskHistory = Array.isArray(state.taskHistory) ? state.taskHistory.map(entry => ({ ...entry })) : [];
+        this.currentDifficulty = Number.isFinite(state.currentDifficulty) ? state.currentDifficulty : 0.3;
+        this.weaknessProfile = {
+            linearWeakness: state.weaknessProfile?.linearWeakness ?? 0.5,
+            quadraticWeakness: state.weaknessProfile?.quadraticWeakness ?? 0.5,
+            largeCoefficients: state.weaknessProfile?.largeCoefficients ?? 0.5,
+            negativeNumbers: state.weaknessProfile?.negativeNumbers ?? 0.5
         };
     }
 
