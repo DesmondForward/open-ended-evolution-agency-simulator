@@ -101,8 +101,51 @@ When the system successfully crosses the **Agency Threshold ($A > 0.75$)**, the 
 
 6.  Build for production:
     ```bash
-    npm run electron:build
+    npm run build
     ```
+
+---
+
+## ✅ CI Contract (Required Gates)
+
+Every PR is expected to satisfy these workflows:
+
+1. **install + lint** (`install-lint`)
+2. **unit tests** (`unit-tests`)
+3. **determinism smoke suite** (`determinism-smoke`)
+4. **build check** (`build-check`)
+
+### Local gate commands
+
+Run the same gates locally before opening a PR:
+
+```bash
+npm ci
+npm run lint
+npm run test:unit
+npm run test:determinism
+npm run build
+```
+
+### Test suites and artifacts
+
+- `npm run test:unit`
+  - Runs the non-determinism regression suite.
+  - Produces coverage in `coverage/unit`.
+  - Produces execution metrics in `artifacts/metrics/unit-test-metrics.json`.
+- `npm run test:determinism`
+  - Runs deterministic hash smoke checks for scenario stability.
+  - Produces coverage in `coverage/determinism`.
+  - Produces execution metrics in `artifacts/metrics/determinism-test-metrics.json`.
+
+### Determinism enforcement rules
+
+The `determinism-required` CI job enforces determinism tests whenever files under:
+
+- `src/renderer/src/simulation/**`
+- `src/shared/**`
+
+change in a PR. If no scenario/core logic files change, the determinism job is recorded as skipped.
 
 ---
 

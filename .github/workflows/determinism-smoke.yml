@@ -1,0 +1,86 @@
+name: determinism-smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      scenario_or_core: ${{ steps.filter.outputs.scenario_or_core }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            scenario_or_core:
+              - 'src/renderer/src/simulation/**'
+              - 'src/shared/**'
+
+  determinism:
+    needs: changes
+    if: needs.changes.outputs.scenario_or_core == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run determinism smoke suite
+        run: npm run test:determinism
+
+      - name: Upload determinism artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-test-artifacts
+          path: |
+            coverage/determinism
+            artifacts/metrics/determinism-test-metrics.json
+
+  determinism-not-required:
+    needs: changes
+    if: needs.changes.outputs.scenario_or_core != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record skipped determinism gate
+        run: |
+          mkdir -p artifacts/metrics
+          cat > artifacts/metrics/determinism-test-metrics.json <<EOF_METRICS
+          {
+            "status": "skipped",
+            "reason": "No scenario/core logic changes detected.",
+            "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF_METRICS
+      - name: Upload determinism skip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-test-artifacts
+          path: artifacts/metrics/determinism-test-metrics.json
+
+  determinism-required:
+    name: determinism-required
+    needs:
+      - changes
+      - determinism
+      - determinism-not-required
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Enforce determinism gate for scenario/core changes
+        run: |
+          if [ "${{ needs.changes.outputs.scenario_or_core }}" = "true" ] && [ "${{ needs.determinism.result }}" != "success" ]; then
+            echo "Determinism tests are required for scenario/core logic changes."
+            exit 1
+          fi
+          echo "Determinism requirement satisfied."
