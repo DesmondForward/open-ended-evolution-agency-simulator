@@ -20,7 +20,7 @@ export class BioScenario implements Scenario<BioConfig> {
     private eventQueue: ScenarioEvent[] = [];
 
     constructor() {
-        this.prng = new PRNG(Date.now());
+        this.prng = new PRNG(0);
         this.config = { ...DEFAULT_BIO_CONFIG };
         this.state = this.getEmptyState();
     }

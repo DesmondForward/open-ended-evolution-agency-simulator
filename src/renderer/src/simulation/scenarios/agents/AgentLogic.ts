@@ -1,6 +1,7 @@
 
 import { AgentEntity, AgentTask, AgentSkill, ActionType, AgentGenome } from './AgentTypes';
 import { PRNG } from '../../../common/prng';
+import { RunContext } from '../../RunContext';
 
 export class AgentLogic {
     public entity: AgentEntity;
@@ -9,8 +10,8 @@ export class AgentLogic {
         this.entity = entity;
     }
 
-    static random(prng: PRNG, generation: number = 0): AgentEntity {
-        const id = `agent-${Date.now()}-${prng.nextInt(0, 10000)}`;
+    static random(prng: PRNG, generation: number = 0, runContext?: RunContext): AgentEntity {
+        const id = runContext ? runContext.nextId('agent') : `agent-${prng.nextInt(0, 10000)}`;
         return {
             id,
             lineageId: `lineage-${id}`,
@@ -115,7 +116,7 @@ export class AgentLogic {
         }
     }
 
-    public mutate(prng: PRNG, generation: number): AgentEntity {
+    public mutate(prng: PRNG, generation: number, runContext?: RunContext): AgentEntity {
         const gene = this.entity.genome;
 
         // Mutate params
@@ -125,18 +126,18 @@ export class AgentLogic {
         // For now, simple chance or if mutation is large
         let lineageId = this.entity.lineageId;
         if (prng.next() < 0.01) { // 1% chance of spontaneous speciation
-            lineageId = `lineage-mut-${Date.now()}-${prng.nextInt(0, 1000)}`;
+            lineageId = runContext ? runContext.nextId('lineage-mut') : `lineage-mut-${prng.nextInt(0, 1000)}`;
         }
 
         return {
-            ...AgentLogic.random(prng, generation), // Start fresh body
-            id: `agent-${Date.now()}-${prng.nextInt(0, 100000)}`,
+            ...AgentLogic.random(prng, generation, runContext), // Start fresh body
+            id: runContext ? runContext.nextId('agent') : `agent-${prng.nextInt(0, 100000)}`,
             lineageId,
             parentId: this.entity.id,
             birthGeneration: generation,
             genome: {
                 ...gene,
-                id: `genome-${Date.now()}`,
+                id: runContext ? runContext.nextId('genome') : `genome-${prng.nextInt(0, 100000)}`,
                 skillCreationThreshold: Math.max(0, Math.min(1, newMetric))
             },
             // Inherit skills? Maybe some?

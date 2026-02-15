@@ -1,11 +1,18 @@
 import { MathTask } from './MathTypes';
 import { PRNG } from '../../../common/prng';
+import { RunContext } from '../../RunContext';
 
 export class MathTaskGenerator {
     private prng: PRNG;
+    private runContext?: RunContext;
 
-    constructor(seed: number) {
-        this.prng = new PRNG(seed);
+    constructor(seedOrContext: number | RunContext) {
+        if (typeof seedOrContext === 'number') {
+            this.prng = new PRNG(seedOrContext);
+        } else {
+            this.runContext = seedOrContext;
+            this.prng = seedOrContext.getPrng();
+        }
     }
 
     /**
@@ -35,7 +42,7 @@ export class MathTaskGenerator {
         const c = (a * x) + b;
 
         return {
-            id: `task-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('task') : `task-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_linear',
             statement: `${a}x + (${b}) = ${c}`,
@@ -68,7 +75,7 @@ export class MathTaskGenerator {
         const statement = `x^2 ${bSign} ${Math.abs(b)}x ${cSign} ${Math.abs(c)} = 0`;
 
         return {
-            id: `task-${Date.now()}-${this.prng.nextInt(0, 1000)}`,
+            id: this.runContext ? this.runContext.nextId('task') : `task-${this.prng.nextInt(0, 1000)}`,
             difficulty: difficulty,
             type: 'algebra_quadratic',
             statement: statement,

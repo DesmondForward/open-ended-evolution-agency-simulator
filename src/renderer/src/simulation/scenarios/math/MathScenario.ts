@@ -8,10 +8,11 @@ import {
 } from '../../types';
 import { PRNG } from '../../../common/prng';
 import { MathState, MathConfig, DEFAULT_MATH_CONFIG, MathClaim } from './MathTypes';
-import { AdversarialTaskGenerator, computePopulationStats } from './AdversarialTaskGenerator';
+import { AdversarialTaskGenerator, AdversarialGeneratorState, computePopulationStats } from './AdversarialTaskGenerator';
 import { MathAgent } from './MathAgent';
 import { getFormalVerificationService } from './FormalVerificationService';
 import { ASTGenomeFactory } from './ASTGenome';
+import { RunContext, RunContextState } from '../../RunContext';
 
 export class MathScenario implements Scenario<MathConfig> {
     public metadata: ScenarioMetadata = {
@@ -28,13 +29,15 @@ export class MathScenario implements Scenario<MathConfig> {
     private taskGenerator: AdversarialTaskGenerator;
     private eventQueue: ScenarioEvent[] = [];
     private previousAgency: number = 0;
+    private runContext: RunContext;
 
     // Internal tracking
     private currentU: number = 0;
 
     constructor() {
-        this.prng = new PRNG(Date.now());
-        this.taskGenerator = new AdversarialTaskGenerator(Date.now());
+        this.runContext = new RunContext(0);
+        this.prng = this.runContext.getPrng();
+        this.taskGenerator = new AdversarialTaskGenerator(this.runContext);
         this.config = { ...DEFAULT_MATH_CONFIG };
         this.state = this.getEmptyState();
     }
@@ -55,8 +58,9 @@ export class MathScenario implements Scenario<MathConfig> {
     }
 
     public initialize(seed: number, config?: MathConfig) {
-        this.prng.setSeed(seed);
-        this.taskGenerator = new AdversarialTaskGenerator(seed);
+        this.runContext = new RunContext(seed);
+        this.prng = this.runContext.getPrng();
+        this.taskGenerator = new AdversarialTaskGenerator(this.runContext);
         if (config) {
             this.config = { ...DEFAULT_MATH_CONFIG, ...config };
         }
@@ -65,7 +69,7 @@ export class MathScenario implements Scenario<MathConfig> {
         const agents: any[] = [];
         for (let i = 0; i < this.config.populationSize; i++) {
             // SOTA Recommendation: Use Neuro-Symbolic Agents (AST)
-            agents.push(MathAgent.random(this.prng, true).genome);
+            agents.push(MathAgent.random(this.prng, true, this.runContext).genome);
         }
 
         this.state = {
@@ -98,6 +102,7 @@ export class MathScenario implements Scenario<MathConfig> {
     public step(control: ControlSignal) {
         this.currentU = control.U;
         this.state.generation += 1;
+        this.runContext.tick();
 
         // 1. Generate Standard Tasks (Curriculum) - PAIRED
         if (this.state.generation % 1 === 0) {
@@ -294,7 +299,7 @@ export class MathScenario implements Scenario<MathConfig> {
 
         if (elites.length === 0) {
             for (let i = 0; i < this.config.populationSize; i++) {
-                nextGen.push(MathAgent.random(this.prng, true).genome);
+                nextGen.push(MathAgent.random(this.prng, true, this.runContext).genome);
             }
             this.state.agents = nextGen;
             return;
@@ -375,7 +380,7 @@ export class MathScenario implements Scenario<MathConfig> {
                 // Keep top 5% elites, replace rest with fresh random AST agents
                 const survivors = this.state.agents.slice(0, Math.floor(this.config.populationSize * 0.05));
                 while (survivors.length < this.config.populationSize) {
-                    survivors.push(MathAgent.random(this.prng, true).genome);
+                    survivors.push(MathAgent.random(this.prng, true, this.runContext).genome);
                 }
                 this.state.agents = survivors;
 
@@ -408,7 +413,9 @@ export class MathScenario implements Scenario<MathConfig> {
         return JSON.stringify({
             state: this.state,
             config: this.config,
-            currentU: this.currentU
+            currentU: this.currentU,
+            runContext: this.runContext.getState(),
+            taskGeneratorState: this.taskGenerator.getDeterministicState()
         });
     }
 
@@ -417,6 +424,19 @@ export class MathScenario implements Scenario<MathConfig> {
         this.state = data.state;
         this.config = data.config;
         this.currentU = data.currentU;
+        const runContextState = data.runContext as RunContextState | undefined;
+        const seed = runContextState?.seed ?? 0;
+        this.runContext = new RunContext(seed);
+        if (runContextState) {
+            this.runContext.restore(runContextState);
+        }
+        this.runContext.setTick(this.state.generation);
+        this.prng = this.runContext.getPrng();
+        this.taskGenerator = new AdversarialTaskGenerator(this.runContext);
+        const taskGeneratorState = data.taskGeneratorState as AdversarialGeneratorState | undefined;
+        if (taskGeneratorState) {
+            this.taskGenerator.restoreDeterministicState(taskGeneratorState);
+        }
     }
 
     public getEvents(): ScenarioEvent[] {

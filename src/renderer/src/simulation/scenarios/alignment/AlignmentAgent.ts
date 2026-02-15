@@ -16,7 +16,7 @@ export class AlignmentAgent {
         const sum = w1 + w2 + w3;
 
         return new AlignmentAgent({
-            id: `agent-${Date.now()}-${prng.nextInt(0, 10000)}`,
+            id: `agent-${prng.nextInt(0, 10000)}`,
             weights: [w1 / sum, w2 / sum, w3 / sum],
             generation: 0
         });

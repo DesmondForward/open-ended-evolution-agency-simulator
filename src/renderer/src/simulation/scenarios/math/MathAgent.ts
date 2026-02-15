@@ -2,6 +2,7 @@ import { MathGenome, MathTask, MathClaim, MathExpression, MathOperator, MathProo
 import { PRNG } from '../../../common/prng';
 import { ASTGenomeFactory, ASTMutator } from './ASTGenome';
 import { NeuralGuide } from './NeuralGuide';
+import { RunContext } from '../../RunContext';
 
 export class MathAgent {
     public genome: MathGenome;
@@ -14,9 +15,9 @@ export class MathAgent {
      * Create a random agent
      * @param useAST - If true, creates an AST-based genome for neuro-symbolic evolution
      */
-    static random(prng: PRNG, useAST: boolean = false): MathAgent {
+    static random(prng: PRNG, useAST: boolean = false, runContext?: RunContext): MathAgent {
         if (useAST) {
-            return new MathAgent(ASTGenomeFactory.createRandom(prng));
+            return new MathAgent(ASTGenomeFactory.createRandom(prng, runContext));
         }
 
         // Standard numeric weights genome
@@ -26,7 +27,7 @@ export class MathAgent {
         const normalized = weights.map(w => w / sum);
 
         return new MathAgent({
-            id: `agent-${Date.now()}-${prng.nextInt(0, 10000)}`,
+            id: runContext ? runContext.nextId('agent') : `agent-${prng.nextInt(0, 10000)}`,
             type: 'numeric_weights',
             data: normalized,
             solvedCount: 0,

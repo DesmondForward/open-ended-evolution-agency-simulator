@@ -17,7 +17,7 @@ function runTests() {
     const raw = {
         meta: {
             version: '2.0.0',
-            timestamp: Date.now(),
+            timestamp: 42,
             scenarioId: 'unknown-scenario'
         },
         store: {
@@ -43,7 +43,7 @@ function runTests() {
 
     // Export/Import roundtrip
     const snapshot = createSnapshot({
-        meta: { version: SNAPSHOT_VERSION, timestamp: Date.now(), scenarioId: 'sde-v1' },
+        meta: { version: SNAPSHOT_VERSION, timestamp: 42, scenarioId: 'sde-v1' },
         store: {
             sdeParameters: { ...DEFAULT_PARAMETERS, k_CD: 0.15 },
             control: { ...DEFAULT_CONTROL },

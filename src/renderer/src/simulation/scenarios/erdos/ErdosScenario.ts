@@ -332,7 +332,7 @@ export class ErdosScenario implements Scenario<ErdosConfig> {
     private eventQueue: ScenarioEvent[] = [];
 
     constructor() {
-        this.prng = new PRNG(Date.now());
+        this.prng = new PRNG(0);
         this.config = { ...DEFAULT_ERDOS_CONFIG };
         this.state = this.getEmptyState();
     }
