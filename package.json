@@ -8,10 +8,11 @@
         "dev": "electron-vite dev",
         "build": "electron-vite build",
         "preview": "electron-vite preview",
-        "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
+        "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts && npm run check:generated-js",
         "test": "npm run test:unit && npm run test:determinism",
         "test:unit": "node scripts/run-test-suite.mjs unit",
-        "test:determinism": "node scripts/run-test-suite.mjs determinism"
+        "test:determinism": "node scripts/run-test-suite.mjs determinism",
+        "check:generated-js": "node scripts/check-no-generated-js.mjs"
     },
     "dependencies": {
         "@electron-toolkit/preload": "^3.0.1",

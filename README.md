@@ -149,6 +149,14 @@ change in a PR. If no scenario/core logic files change, the determinism job is r
 
 ---
 
+## 🧭 Source vs Build Boundaries
+
+- `src/renderer/src/simulation/**` is **TypeScript-only source**. Do not commit transpiled `.js` files in this tree.
+- Build artifacts must be emitted by tooling into output folders (`out/` for Electron/Vite builds, `dist/` when used by external tooling), never back into `src/**`.
+- Run `npm run check:generated-js` (also included in `npm run lint`) before opening a PR to ensure generated JS has not been added to source paths.
+
+---
+
 ## 🏗 Project Structure
 
 ```
