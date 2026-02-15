@@ -8,7 +8,7 @@ declare global {
             logAIAction: (data: any) => Promise<{ success: boolean; path?: string; error?: string }>
             openLogsFolder: () => Promise<{ success: boolean; error?: string }>
             saveAgent: (agent: LibraryEntry) => Promise<{ success: boolean; path?: string; error?: string }>
-            saveErdosReport: (payload: { problemId: string; erdosNumber?: number; title: string; markdown: string }) => Promise<{ success: boolean; path?: string; error?: string }>
+            saveErdosReport: (payload: { problemId: string; erdosNumber?: number; title: string; markdown: string; datasetRevision: string; evaluatorStatus: 'verified' | 'refuted' | 'inconclusive'; evaluatorArtifactId: string; evidenceReferences: string[] }) => Promise<{ success: boolean; path?: string; error?: string }>
             getAgents: () => Promise<LibraryEntry[]>
             deleteAgent: (id: string) => Promise<{ success: boolean; error?: string }>
             summonAgent: (payload: { query: string; topK?: number; preferredAdapter?: 'python' | 'http' | 'cli' | 'native' }) => Promise<{ success: boolean; data?: Array<{ score: number; rationale: string[]; entry: LibraryEntry; summonPlan: { adapterType: string; entrypoint: string; invocation: string } }>; error?: string }>

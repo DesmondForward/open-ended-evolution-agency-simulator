@@ -6,6 +6,10 @@ export interface ErdosReportPayload {
     erdosNumber?: number;
     title: string;
     markdown: string;
+    datasetRevision: string;
+    evaluatorStatus: 'verified' | 'refuted' | 'inconclusive';
+    evaluatorArtifactId: string;
+    evidenceReferences: string[];
 }
 
 export interface ErdosReportResult {
@@ -32,7 +36,19 @@ export function saveErdosReport(baseDir: string, payload: ErdosReportPayload): E
             : 'unlisted';
         const slug = sanitizeSegment(payload.problemId || payload.title) || 'problem';
         const filePath = join(reportsDir, `${numberPrefix}-${slug}.md`);
-        fs.writeFileSync(filePath, payload.markdown, 'utf8');
+        const reportWithMetadata = [
+            '---',
+            `problemId: ${payload.problemId}`,
+            `title: ${payload.title}`,
+            `datasetRevision: ${payload.datasetRevision}`,
+            `evaluatorStatus: ${payload.evaluatorStatus}`,
+            `evaluatorArtifactId: ${payload.evaluatorArtifactId}`,
+            `evidenceReferences: [${payload.evidenceReferences.map(reference => JSON.stringify(reference)).join(', ')}]`,
+            '---',
+            '',
+            payload.markdown
+        ].join('\n');
+        fs.writeFileSync(filePath, reportWithMetadata, 'utf8');
         return { success: true, path: filePath };
     } catch (error: any) {
         return { success: false, error: error?.message || 'Failed to save Erdos report.' };
